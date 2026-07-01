@@ -1,0 +1,41 @@
+{
+  "name": "honoka-publish",
+  "version": "0.1.0",
+  "description": "Publish local Markdown files to Notion with incremental sync, image upload, and file watching.",
+  "type": "commonjs",
+  "bin": {
+    "honoka-publish": "./bin/honoka-publish.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node bin/honoka-publish.js",
+    "publish:patch": "npm version patch && git push --follow-tags"
+  },
+  "keywords": [
+    "notion",
+    "markdown",
+    "publish",
+    "sync",
+    "cli"
+  ],
+  "license": "MIT",
+  "author": "",
+  "dependencies": {
+    "axios": "^1.15.2"
+  },
+  "optionalDependencies": {
+    "node-telegram-bot-api": "^0.67.0",
+    "playwright": "^1.59.0",
+    "@mozilla/readability": "^0.6.0",
+    "jsdom": "^29.1.0",
+    "turndown": "^7.2.4"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "LICENSE",
+    "README.md"
+  ]
+}
