@@ -1,0 +1,125 @@
+name: Build & Release Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Extension ZIP
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies (PIL for icons)
+        run: pip install Pillow
+
+      - name: Sync manifest version from git tag
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Syncing extension version to $VERSION"
+          node -e "
+            const fs = require('fs');
+            const V = process.env.VERSION;
+            const m = JSON.parse(fs.readFileSync('chrome-extension/manifest.json','utf8'));
+            m.version = V;
+            fs.writeFileSync('chrome-extension/manifest.json', JSON.stringify(m, null, 2) + '\n');
+            console.log('manifest.json version ->', V);
+          "
+
+      - name: Generate icons
+        run: python3 chrome-extension/scripts/generate-icons.py
+
+      - name: Package extension
+        run: |
+          cd chrome-extension
+          mkdir -p build
+          # Build file list (exactly like package-cws.mjs)
+          FILES=(
+            manifest.json
+            icons/icon16.png
+            icons/icon48.png
+            icons/icon128.png
+            src/background.js
+            src/content/clipper.js
+            src/lib/notion.js
+            src/lib/bridge.js
+            src/lib/markdown.js
+            src/popup/popup.html
+            src/popup/popup.js
+            src/popup/popup.css
+            src/options/options.html
+            src/options/options.js
+            src/options/options.css
+          )
+          VERSION="${GITHUB_REF_NAME#v}"
+          zip -r "build/honoka-publish-v${VERSION}.zip" "${FILES[@]}"
+          echo "Built: honoka-publish-v${VERSION}.zip"
+
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: honoka-publish-extension
+          path: chrome-extension/build/honoka-publish-*.zip
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code (for CHANGELOG)
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: honoka-publish-extension
+          path: release-assets
+
+      - name: Extract changelog for this version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          node -e "
+            const fs = require('fs');
+            const md = fs.readFileSync('CHANGELOG.md','utf8');
+            const lines = md.split('\n');
+            const marker = '## v' + process.env.VERSION;
+            let start = -1, end = lines.length;
+            for (let i = 0; i < lines.length; i++) {
+              if (lines[i].startsWith('## v') && start === -1 && lines[i] === marker) start = i;
+              else if (lines[i].startsWith('## v') && start !== -1 && i > start) { end = i; break; }
+            }
+            if (start === -1) {
+              console.error('Section not found for v' + process.env.VERSION);
+              process.exit(1);
+            }
+            const section = lines.slice(start, end).join('\n').trim() + '\n';
+            fs.writeFileSync('release-notes.md', section);
+            console.log('Extracted changelog for v' + process.env.VERSION);
+          "
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*.zip
+          body_path: release-notes.md
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
