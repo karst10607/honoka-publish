@@ -1,0 +1,13 @@
+{
+  "name": "honoka-publish-extension",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/generate-icons.mjs",
+    "package": "node scripts/package-cws.mjs",
+    "prepublish": "npm run build && npm run package"
+  },
+  "devDependencies": {
+    "sharp": "^0.34.5"
+  }
+}

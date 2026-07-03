@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Honoka Publish</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Honoka Publish</h1>
+      <span id="bridgeStatus" class="status-dot offline" title="Bridge status"></span>
+    </header>
+
+    <div class="section">
+      <button id="clipBtn" class="btn primary">📋 Clip This Page</button>
+      <button id="clipAndPushBtn" class="btn secondary">📋 Clip + Push to Notion</button>
+    </div>
+
+    <div class="section">
+      <label for="urlInput">Or paste a URL to clip:</label>
+      <div class="input-row">
+        <input type="url" id="urlInput" placeholder="https://..." />
+        <button id="urlClipBtn" class="btn small">Go</button>
+      </div>
+    </div>
+
+    <div id="result" class="result hidden"></div>
+
+    <footer>
+      <span id="statusText">Checking Bridge...</span>
+      <a href="#" id="optionsLink">Settings</a>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
