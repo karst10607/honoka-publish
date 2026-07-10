@@ -8,16 +8,27 @@ const { syncDirectory } = require("./sync");
 const { startWatcher } = require("./watcher");
 const { initConfig } = require("./registry");
 const { getLicenseLevel } = require("./license");
+const { runBridge } = require("./bridge");
+const { runMCP } = require("./mcp");
 
 const HELP_TEXT = `
 honoka-publish — Publish local Markdown files to Notion.
 
 USAGE
+  honoka-publish                          Start MCP server (for AI tools)
+  honoka-publish bridge [--port <n>]      Start Bridge HTTP server (for Chrome Extension)
   honoka-publish <directory>              One-shot sync
   honoka-publish --watch <directory>      Watch for changes
   honoka-publish --init                   Create .honoka config in CWD
   honoka-publish --version                Show version
   honoka-publish --help                   Show this message
+
+MODES
+  MCP mode (default)       Communicates over stdio via MCP protocol
+                           Integrates with Qoder, Claude Code, Cursor
+  Bridge mode (HTTP)       Starts HTTP server on port 44124
+                           Chrome Extension connects here
+  Sync mode                Reads .md files and pushes to Notion
 
 OPTIONS
   --notion-token <pat>    Notion PAT (or set NOTION_TOKEN env)
@@ -25,15 +36,20 @@ OPTIONS
   --watch                 Watch directory for changes
   --pro                   Enable Pro features (multi-dir, multi-target)
   --verbose               Show detailed logs
+  --port <n>              Bridge server port (default: 44124)
 
 EXAMPLES
-  honoka-publish ./docs
+  honoka-publish                        # AI tool integration (MCP)
+  honoka-publish bridge                 # Chrome Extension HTTP server
+  honoka-publish bridge --port 44125    # Custom port
+  honoka-publish ./docs                 # Sync to Notion
   honoka-publish --watch ./docs
   honoka-publish --init
 
 ENVIRONMENT
   NOTION_TOKEN            Notion Personal Access Token
   NOTION_DATABASE         Notion Database ID
+  HONOKA_DIR              Docs directory (default: ~/honoka-docs)
   HONOKA_LICENSE          Pro license key
 `;
 
@@ -73,14 +89,20 @@ function parseArgs(args) {
       case "--pro":
         opts.pro = true;
         break;
+      case "--port":
+        opts.port = parseInt(args[++i], 10) || 44124;
+        break;
       case "--notion-token":
         opts.notionToken = args[++i];
         break;
       case "--notion-database":
         opts.notionDatabase = args[++i];
         break;
+      case "bridge":
+        opts.mode = "bridge";
+        break;
       default:
-        if (!arg.startsWith("--") && !opts.directory) {
+        if (!arg.startsWith("--") && !opts.directory && !opts.mode) {
           opts.directory = arg;
         }
         break;
@@ -97,8 +119,20 @@ function parseArgs(args) {
 async function run(rawArgs) {
   const opts = parseArgs(rawArgs);
 
+  // ── Bridge mode ──
+  if (opts.mode === "bridge") {
+    runBridge(opts.port || 44124);
+    return; // runBridge blocks via server.listen
+  }
+
   if (opts.init) {
     return initConfig(process.cwd());
+  }
+
+  // ── Default (no args) → MCP mode ──
+  if (!opts.directory && !opts.watch) {
+    runMCP();
+    return; // runMCP blocks on stdin
   }
 
   const targetDir = opts.directory || process.cwd();

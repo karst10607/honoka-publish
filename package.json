@@ -1,7 +1,7 @@
 {
   "name": "honoka-publish",
   "version": "0.1.0",
-  "description": "Publish local Markdown files to Notion with incremental sync, image upload, and file watching.",
+  "description": "Publish local Markdown files to Notion. MCP server and Bridge HTTP server for AI tool and Chrome Extension integration.",
   "type": "commonjs",
   "bin": {
     "honoka-publish": "./bin/honoka-publish.js"
@@ -14,6 +14,8 @@
     "publish:patch": "npm version patch && git push --follow-tags"
   },
   "keywords": [
+    "mcp",
+    "bridge",
     "notion",
     "markdown",
     "publish",
