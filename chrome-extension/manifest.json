@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Honoka Lite",
-  "version": "1.8.1",
+  "version": "1.9.0",
   "description": "Clip web pages and publish to Notion. Works standalone or with Honoka Bridge for advanced features.",
   "permissions": [
     "activeTab",
