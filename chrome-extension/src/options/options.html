@@ -3,6 +3,115 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Honoka — Doc Library</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="layout">
+
+    <!-- ══ SIDEBAR ══ -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <strong>Honoka</strong>
+        <span class="bridge-dot-wrap">
+          <span id="bridge-dot" class="bridge-dot checking" title="Bridge: checking..."></span>
+          <div id="bridge-popover" class="bridge-popover hidden"></div>
+        </span>
+      </div>
+
+      <div class="sidebar-views" id="sidebar-views"></div>
+
+      <div class="sidebar-divider"></div>
+
+      <div class="folder-tree" id="folder-tree"></div>
+
+      <div class="sidebar-footer">
+        <div class="theme-switcher" id="theme-switcher"></div>
+        <button class="settings-btn" id="settings-btn" title="Settings">⚙</button>
+      </div>
+    </aside>
+
+    <!-- ══ MAIN CONTENT ══ -->
+    <main class="main">
+      <div class="main-header">
+        <h1 id="view-title">All Docs</h1>
+        <div class="main-actions">
+          <span class="doc-count" id="doc-count"></span>
+          <button class="btn btn-sm" id="export-json" title="Export all visible docs as JSON">Export JSON</button>
+          <button class="btn btn-sm" id="export-csv" title="Export all visible docs as CSV">Export CSV</button>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <input type="text" id="search-box" class="search-box" placeholder="Search title, category, source..." autocomplete="off">
+      </div>
+
+      <div class="table-wrap">
+        <table class="doc-table">
+          <thead id="doc-thead">
+            <tr>
+              <th data-field="title">Title</th>
+              <th data-field="category">Category</th>
+              <th data-field="lastModified">Modified</th>
+              <th data-field="size">Size</th>
+              <th data-field="source">Source</th>
+            </tr>
+          </thead>
+          <tbody id="doc-tbody">
+            <tr><td colspan="5" class="empty-state">Connecting to Bridge...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="status-bar" id="status-bar"></div>
+    </main>
+  </div>
+
+  <!-- ══ SETTINGS MODAL ══ -->
+  <div id="settings-modal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <h2>Settings</h2>
+
+      <div class="form-group">
+        <label>Bridge URL</label>
+        <input type="text" id="bridgeUrl" placeholder="http://127.0.0.1:44124">
+        <div class="desc">Local Bridge server for doc management.</div>
+      </div>
+
+      <div class="form-group">
+        <label>Notion PAT</label>
+        <input type="password" id="notionPat" placeholder="secret_...">
+        <div class="desc">Create at <a href="https://www.notion.so/my-integrations" target="_blank">notion.so/my-integrations</a></div>
+      </div>
+
+      <div class="form-group">
+        <label>Notion Database ID</label>
+        <input type="text" id="notionDatabaseId" placeholder="32-char UUID">
+      </div>
+
+      <div class="form-group">
+        <label>
+          <input type="checkbox" id="autoPush">
+          Auto-push to Notion on every clip
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <div style="flex:1; font-size:12px; color:var(--text-muted); align-self:center;" id="saveStatus"></div>
+        <button class="btn btn-sm" id="modal-close">Cancel</button>
+        <button class="btn btn-sm btn-primary" id="saveBtn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Honoka Publish — Settings</title>
   <link rel="stylesheet" href="options.css">
 </head>

@@ -259,6 +259,14 @@ async function handleSettingsPost(req, res) {
   }
 }
 
+function extractFrontmatterField(filePath, field) {
+  try {
+    const content = fs.readFileSync(filePath, "utf8").slice(0, 4096);
+    const match = content.match(new RegExp(`^${field}:\\s*(.+)\\s*$`, "m"));
+    return match ? match[1].trim() : "";
+  } catch { return ""; }
+}
+
 async function handleList(req, res) {
   const clipsDir = path.join(HONOKA_DIR, "Clips");
   const docs = [];
@@ -267,35 +275,36 @@ async function handleList(req, res) {
     for (const cat of categories) {
       if (!cat.isDirectory() || cat.name.startsWith(".")) continue;
       const catPath = path.join(clipsDir, cat.name);
-      const entries = fs.readdirSync(catPath, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        const indexPath = path.join(catPath, entry.name, "index.md");
-        if (fs.existsSync(indexPath)) {
-          const stat = fs.statSync(indexPath);
-          docs.push({
-            title: entry.name,
-            path: path.relative(HONOKA_DIR, path.join(catPath, entry.name)),
-            category: cat.name,
-            lastModified: stat.mtime.toISOString(),
-            size: stat.size,
-          });
-        } else {
-          // Folder without index.md — still count as a doc folder
-          const stat = fs.statSync(path.join(catPath, entry.name));
-          docs.push({
-            title: entry.name,
-            path: path.relative(HONOKA_DIR, path.join(catPath, entry.name)),
-            category: cat.name,
-            lastModified: stat.mtime.toISOString(),
-            size: 0,
-          });
-        }
-      }
+      walkDir(catPath, docs, cat.name, HONOKA_DIR);
     }
   }
   docs.sort((a, b) => b.lastModified.localeCompare(a.lastModified));
   json(res, 200, { docs, docsDir: HONOKA_DIR, count: docs.length });
+}
+
+function walkDir(dirPath, docs, category, baseDir) {
+  let entries;
+  try { entries = fs.readdirSync(dirPath, { withFileTypes: true }); } catch { return; }
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    const subPath = path.join(dirPath, entry.name);
+    const indexPath = path.join(subPath, "index.md");
+    if (fs.existsSync(indexPath)) {
+      const stat = fs.statSync(indexPath);
+      const source = extractFrontmatterField(indexPath, "source");
+      docs.push({
+        title: entry.name,
+        path: path.relative(baseDir, subPath),
+        category,
+        lastModified: stat.mtime.toISOString(),
+        size: stat.size,
+        source,
+      });
+    } else {
+      // Recurse into subdirectory (handles Clips/category/YYYY/MM/date-slug/ structure)
+      walkDir(subPath, docs, category, baseDir);
+    }
+  }
 }
 
 // ── Request Router ──
