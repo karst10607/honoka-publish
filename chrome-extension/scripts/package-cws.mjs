@@ -1,22 +1,17 @@
 #!/usr/bin/env node
 /**
  * Package extension for CWS submission.
- * Creates a ZIP file with only the files needed for Chrome Web Store.
+ * Strips dev-only entries (key, <all_urls>) from manifest before zipping.
  */
-import { createReadStream, existsSync, mkdirSync, readFileSync } from 'fs';
-import { resolve, dirname, relative } from 'path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'fs';
+import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { createWriteStream } from 'fs';
-import { pipeline } from 'stream/promises';
-
-// Use zlib for ZIP
-import { createDeflateRaw } from 'zlib';
+import { execSync } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const EXT_DIR = resolve(__dirname, '..');
 const BUILD_DIR = resolve(EXT_DIR, 'build');
 
-// Files/dirs to include in the package
 const INCLUDE = [
   'manifest.json',
   'icons/icon16.png',
@@ -36,54 +31,49 @@ const INCLUDE = [
 ];
 
 async function main() {
-  console.log('Packaging Honoka Publish extension for CWS...\n');
+  const manifestPath = resolve(EXT_DIR, 'manifest.json');
 
-  if (!existsSync(BUILD_DIR)) {
-    mkdirSync(BUILD_DIR, { recursive: true });
+  // Strip dev-only entries from manifest (key + <all_urls>)
+  let raw = readFileSync(manifestPath, 'utf8');
+  const m = JSON.parse(raw);
+  let changed = false;
+  if (m.key) { delete m.key; changed = true; }
+  const allUrlsIdx = m.host_permissions?.indexOf('<all_urls>');
+  if (allUrlsIdx !== -1) {
+    m.host_permissions.splice(allUrlsIdx, 1);
+    changed = true;
+  }
+  if (changed) {
+    writeFileSync(manifestPath, JSON.stringify(m, null, 2) + '\n', 'utf8');
+    console.log('  Stripped dev-only entries from manifest.json');
   }
 
-  const manifest = JSON.parse(readFileSync(resolve(EXT_DIR, 'manifest.json'), 'utf8'));
-  const version = manifest.version;
-  const zipName = `honoka-publish-v${version}.zip`;
+  // Build ZIP
+  if (!existsSync(BUILD_DIR)) mkdirSync(BUILD_DIR, { recursive: true });
+
+  const version = m.version;
+  const zipName = `honoka-lite-cws-v${version}.zip`;
   const zipPath = resolve(BUILD_DIR, zipName);
 
-  // Build file list
-  const files = [];
-  for (const relPath of INCLUDE) {
-    const fullPath = resolve(EXT_DIR, relPath);
-    if (!existsSync(fullPath)) {
-      console.error(`  ⚠  Missing: ${relPath}`);
-      continue;
+  for (const file of INCLUDE) {
+    if (!existsSync(resolve(EXT_DIR, file))) {
+      console.error(`  Missing: ${file}`);
+      if (changed) writeFileSync(manifestPath, raw, 'utf8');
+      process.exit(1);
     }
-    files.push({ relPath, fullPath });
-    console.log(`  ✓ ${relPath}`);
   }
 
-  // Create ZIP using Node.js built-in zlib + streaming
-  // For simplicity, we'll use a zip library approach or shell zip command
-  // Let's use the system zip command if available
-  const { execSync } = await import('child_process');
+  console.log('Packaging ' + zipName + '...');
+  const fileArgs = INCLUDE.map(f => '"' + f + '"').join(' ');
+  execSync('cd "' + EXT_DIR + '" && zip -9 "' + zipPath + '" ' + fileArgs, { stdio: 'inherit', shell: true });
 
-  try {
-    // Check if zip is available
-    execSync('which zip', { stdio: 'ignore' });
+  const size = existsSync(zipPath) ? statSync(zipPath).size : 0;
+  console.log('\nDone: ' + zipName + ' (' + (size / 1024).toFixed(1) + ' KB, ' + INCLUDE.length + ' files)');
 
-    // Build zip command with exact file list
-    const fileArgs = files.map(f => relative(EXT_DIR, f.fullPath)).join(' ');
-    // Remove existing zip if present
-    try { execSync(`rm -f "${zipPath}"`); } catch {}
-
-    const cmd = `cd "${EXT_DIR}" && zip -r "${zipPath}" ${fileArgs}`;
-    execSync(cmd, { stdio: 'inherit' });
-
-    const stats = readFileSync(zipPath);
-    console.log(`\n✅ Created: ${zipName}`);
-    console.log(`   Size: ${(Buffer.byteLength(stats) / 1024).toFixed(1)} KB`);
-    console.log(`   Location: ${zipPath}`);
-  } catch {
-    // Fallback: use a simple JS-based zip (limited)
-    console.error('\n❌ zip command not available. Install zip or create manually.');
-    process.exit(1);
+  // Restore manifest
+  if (changed) {
+    writeFileSync(manifestPath, raw, 'utf8');
+    console.log('  Restored manifest.json');
   }
 }
 
