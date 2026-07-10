@@ -28,6 +28,9 @@ const INCLUDE = [
   'src/options/options.html',
   'src/options/options.js',
   'src/options/options.css',
+  'src/options/lib/themes.js',
+  'src/options/lib/sidebar.js',
+  'src/options/lib/doclib.js',
 ];
 
 async function main() {
