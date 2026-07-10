@@ -124,15 +124,34 @@ function startBridgePolling() {
 /** Clip a tab (inject content script, extract content). */
 async function clipTab(tabId, opts = {}) {
   // Ensure content script is loaded
+  let injected = false;
   try {
     await chrome.tabs.sendMessage(tabId, { action: 'ping' });
   } catch {
     // Content script not loaded — inject it
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ['src/content/clipper.js'],
-    });
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['src/content/clipper.js'],
+      });
+      injected = true;
+    } catch (err) {
+      // activeTab only grants access to the active tab.
+      // If injection fails (e.g. clipUrl opens a background tab),
+      // activate the tab and retry once.
+      if (opts._retried) throw new Error('Cannot access this page. Try navigating to it first.');
+      await chrome.tabs.update(tabId, { active: true });
+      await new Promise(r => setTimeout(r, 500));
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['src/content/clipper.js'],
+      });
+      injected = true;
+    }
   }
+
+  // Wait a beat for content script to initialize after injection
+  if (injected) await new Promise(r => setTimeout(r, 100));
 
   // Ask content script to clip
   const result = await chrome.tabs.sendMessage(tabId, { action: 'clipPage' });
@@ -170,7 +189,7 @@ async function clipUrl(url, opts = {}) {
   const tab = await chrome.tabs.create({ url, active: false });
   // Wait for page to load
   await waitForTabLoaded(tab.id);
-  const result = await clipTab(tab.id, opts);
+  const result = await clipTab(tab.id, { ...opts, _retried: true });
   await chrome.tabs.remove(tab.id);
   return result;
 }

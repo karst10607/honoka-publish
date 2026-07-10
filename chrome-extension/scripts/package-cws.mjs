@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Package extension for CWS submission.
- * Strips dev-only entries (key, <all_urls>) from manifest before zipping.
+ * Strips dev-only `key` from manifest before zipping.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'fs';
 import { resolve, dirname } from 'path';
@@ -33,19 +33,14 @@ const INCLUDE = [
 async function main() {
   const manifestPath = resolve(EXT_DIR, 'manifest.json');
 
-  // Strip dev-only entries from manifest (key + <all_urls>)
+  // Strip dev-only `key` from manifest (CWS uses its own signing)
   let raw = readFileSync(manifestPath, 'utf8');
   const m = JSON.parse(raw);
   let changed = false;
   if (m.key) { delete m.key; changed = true; }
-  const allUrlsIdx = m.host_permissions?.indexOf('<all_urls>');
-  if (allUrlsIdx !== -1) {
-    m.host_permissions.splice(allUrlsIdx, 1);
-    changed = true;
-  }
   if (changed) {
     writeFileSync(manifestPath, JSON.stringify(m, null, 2) + '\n', 'utf8');
-    console.log('  Stripped dev-only entries from manifest.json');
+    console.log('  Stripped dev-only `key` from manifest.json');
   }
 
   // Build ZIP
