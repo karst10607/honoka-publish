@@ -10,6 +10,7 @@ let folderTreeExpanded = {};
 
 const VIEWS = [
   { id: 'all', icon: '📄', label: 'All Docs' },
+  { id: 'history', icon: '👁️', label: 'History' },
   { id: 'local', icon: '💾', label: 'Local Only' },
   { id: 'recent', icon: '🕐', label: 'Recent (7d)' },
   { id: 'favorites', icon: '★', label: 'Favorites' },
@@ -51,7 +52,8 @@ export function updateSidebarCounts(docs) {
 
   const counts = {
     all: docs.length,
-    local: docs.filter(d => d.category !== 'notion').length,
+    history: docs.filter(d => d._tracked).length,
+    local: docs.filter(d => d.category !== 'notion' && !d._tracked).length,
     recent: docs.filter(d => new Date(d.lastModified).getTime() > weekAgo).length,
     favorites: 0,
   };
@@ -233,8 +235,11 @@ function setActiveView(view) {
       case 'all':
         filterFn = () => true;
         break;
+      case 'history':
+        filterFn = d => d._tracked === true;
+        break;
       case 'local':
-        filterFn = d => d.category !== 'notion';
+        filterFn = d => d.category !== 'notion' && !d._tracked;
         break;
       case 'recent':
         filterFn = d => new Date(d.lastModified).getTime() > weekAgo;
@@ -274,5 +279,15 @@ function escapeHtml(str) {
 /** Show/hide loading spinner */
 export function setLoading(isLoading) {
   const el = document.getElementById('view-title');
-  if (el) el.textContent = isLoading ? 'Loading...' : 'All Docs';
+  if (el) el.textContent = isLoading ? 'Loading...' : '';
+  if (!isLoading) {
+    // Restore the current view label
+    const active = document.querySelector('.sidebar-item.active');
+    if (active) {
+      const label = active.querySelector('.si-label');
+      if (label) el.textContent = label.textContent;
+    } else {
+      el.textContent = 'All Docs';
+    }
+  }
 }

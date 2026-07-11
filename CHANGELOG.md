@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.10.0
+
+- Auto-track Notion page visits (content script auto-injects on Notion pages)
+- New History view in Doc Library sidebar showing tracked Notion pages
+- Local tracking persists in chrome.storage, visible even when Bridge is offline
+- Tracked pages open original Notion URL on click
+- Storage queue prevents race conditions when multiple Notion tabs open
+- History limit (200 entries) with automatic cleanup of oldest entries
+
 ## v1.9.0
 
 - iTunes-style Doc Library options page with sidebar, sortable doc table, and metadata

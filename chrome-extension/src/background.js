@@ -19,6 +19,175 @@ const state = {
   },
 };
 
+// ── Page history storage (serialized queue) ─────────────────────────
+// All mutations to honoka_global_index and honoka_page_* keys go through
+// this queue to prevent race conditions when multiple Notion tabs write
+// concurrently.
+
+function _pageKey(pageId) { return `honoka_page_${pageId}`; }
+
+let _storageQueue = Promise.resolve();
+
+function enqueue(fn) {
+  _storageQueue = _storageQueue
+    .then(fn)
+    .catch((e) => console.warn('Honoka storage queue error:', e));
+  return _storageQueue;
+}
+
+function handleUpsertPageEntry({ pageId, title, url, tokenSnapshot, properties, extras }) {
+  return enqueue(() => new Promise((resolve) => {
+    const pk = _pageKey(pageId);
+    chrome.storage.local.get([pk, 'honoka_global_index', 'honoka_history_limit'], (data) => {
+      const existing = data[pk] || {};
+      const limit = data.honoka_history_limit || 200;
+      const index = data.honoka_global_index || [];
+      const now = new Date().toISOString();
+
+      const newUsable = title && title !== 'Untitled';
+      const oldUsable = existing.title && existing.title !== 'Untitled';
+      let bestTitle;
+      if (newUsable && oldUsable) {
+        bestTitle = title.length >= existing.title.length ? title : existing.title;
+      } else if (newUsable) {
+        bestTitle = title;
+      } else if (oldUsable) {
+        bestTitle = existing.title;
+      } else {
+        bestTitle = title || existing.title || 'Untitled';
+      }
+
+      const entry = {
+        title: bestTitle,
+        url,
+        first_seen: existing.first_seen || now,
+        last_seen: now,
+        visit_count: existing.visit_count ? existing.visit_count + 1 : 1,
+        token_snapshot: tokenSnapshot,
+      };
+      if (extras) Object.assign(entry, extras);
+      if (existing.favorite) entry.favorite = true;
+      if (properties && Object.keys(properties).length > 0) {
+        entry.properties = properties;
+      } else if (existing.properties) {
+        entry.properties = existing.properties;
+      }
+      if (existing.meta) entry.meta = existing.meta;
+      if (existing.api_properties) entry.api_properties = existing.api_properties;
+
+      const newIndex = index.includes(pageId) ? index : [...index, pageId];
+      const toStore = { [pk]: entry, honoka_global_index: newIndex };
+
+      if (limit > 0 && newIndex.length > limit) {
+        const allKeys = newIndex.map((id) => _pageKey(id));
+        chrome.storage.local.get(allKeys, (allData) => {
+          const sorted = newIndex.slice().sort((a, b) => {
+            const ea = allData[_pageKey(a)] || {};
+            const eb = allData[_pageKey(b)] || {};
+            return (eb.last_seen || '').localeCompare(ea.last_seen || '');
+          });
+          const keep = sorted.slice(0, limit);
+          const drop = sorted.slice(limit);
+          toStore.honoka_global_index = keep;
+          chrome.storage.local.remove(drop.map((id) => _pageKey(id)), () => {
+            chrome.storage.local.set(toStore, () => resolve({ ok: true }));
+          });
+        });
+      } else {
+        chrome.storage.local.set(toStore, () => resolve({ ok: true }));
+      }
+    });
+  }));
+}
+
+function handlePatchPageMeta({ pageId, meta, apiProperties }) {
+  return enqueue(() => new Promise((resolve) => {
+    const pk = _pageKey(pageId);
+    chrome.storage.local.get([pk], (data) => {
+      const entry = data[pk];
+      if (!entry) { resolve({ ok: false }); return; }
+      if (meta) entry.meta = meta;
+      if (apiProperties && Object.keys(apiProperties).length > 0) {
+        entry.api_properties = apiProperties;
+      }
+      chrome.storage.local.set({ [pk]: entry }, () => resolve({ ok: true }));
+    });
+  }));
+}
+
+function handlePatchPageTitle({ pageId, title, properties }) {
+  return enqueue(() => new Promise((resolve) => {
+    const pk = _pageKey(pageId);
+    chrome.storage.local.get([pk], (data) => {
+      const entry = data[pk];
+      if (!entry) { resolve({ ok: false }); return; }
+      if (!entry.title || entry.title === 'Untitled') {
+        entry.title = title;
+      }
+      if (properties && Object.keys(properties).length > 0) {
+        entry.properties = properties;
+      }
+      chrome.storage.local.set({ [pk]: entry }, () => resolve({ ok: true }));
+    });
+  }));
+}
+
+function handleDeletePages({ pageIds }) {
+  return enqueue(() => new Promise((resolve) => {
+    const keysToRemove = pageIds.map(_pageKey);
+    chrome.storage.local.get(['honoka_global_index'], (data) => {
+      const index = (data.honoka_global_index || []).filter((id) => !pageIds.includes(id));
+      chrome.storage.local.remove(keysToRemove, () => {
+        chrome.storage.local.set({ honoka_global_index: index }, () => {
+          resolve({ ok: true, deleted: pageIds.length });
+        });
+      });
+    });
+  }));
+}
+
+function handleClearAllHistory() {
+  return enqueue(() => new Promise((resolve) => {
+    chrome.storage.local.get(['honoka_global_index'], (data) => {
+      const index = data.honoka_global_index || [];
+      const keysToRemove = index.map(_pageKey);
+      chrome.storage.local.remove(keysToRemove, () => {
+        chrome.storage.local.set({ honoka_global_index: [] }, () => {
+          resolve({ ok: true, deleted: index.length });
+        });
+      });
+    });
+  }));
+}
+
+function handleEnforceLimit({ limit }) {
+  return enqueue(() => new Promise((resolve) => {
+    chrome.storage.local.get(['honoka_global_index'], (data) => {
+      const index = data.honoka_global_index || [];
+      if (!limit || limit <= 0 || index.length <= limit) {
+        resolve({ ok: true, dropped: 0 });
+        return;
+      }
+      const pageKeys = index.map(_pageKey);
+      chrome.storage.local.get(pageKeys, (allData) => {
+        const sorted = index.slice().sort((a, b) => {
+          const ea = allData[_pageKey(a)] || {};
+          const eb = allData[_pageKey(b)] || {};
+          return (eb.last_seen || '').localeCompare(ea.last_seen || '');
+        });
+        const keep = sorted.slice(0, limit);
+        const drop = sorted.slice(limit);
+        chrome.storage.local.remove(drop.map(_pageKey), () => {
+          chrome.storage.local.set({ honoka_global_index: keep }, () => {
+            resolve({ ok: true, dropped: drop.length });
+          });
+        });
+      });
+    });
+  }));
+}
+
+
 // ── Init ──
 chrome.runtime.onInstalled.addListener(async () => {
   await loadSettings();
@@ -85,6 +254,51 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     case 'checkBridge':
       checkBridge().then(status => sendResponse(status));
+      return true;
+
+    // ── Page history tracking ──
+    case 'upsertPageEntry':
+      handleUpsertPageEntry(request).then(r => sendResponse(r));
+      return true;
+
+    case 'patchPageMeta':
+      handlePatchPageMeta(request).then(r => sendResponse(r));
+      return true;
+
+    case 'patchPageTitle':
+      handlePatchPageTitle(request).then(r => sendResponse(r));
+      return true;
+
+    case 'deletePages':
+      handleDeletePages(request).then(r => sendResponse(r));
+      return true;
+
+    case 'clearAllHistory':
+      handleClearAllHistory().then(r => sendResponse(r));
+      return true;
+
+    case 'enforceLimit':
+      handleEnforceLimit(request).then(r => sendResponse(r));
+      return true;
+
+    case 'getTitleFromHistory':
+      chrome.history.search({ text: '', maxResults: 500, startTime: 0 }, (results) => {
+        if (chrome.runtime.lastError || !results) {
+          sendResponse({ title: null });
+          return;
+        }
+        let match = results.find((r) => r.url === request.url);
+        if (!match && request.pageId) {
+          match = results.find((r) => r.url && r.url.includes(request.pageId));
+        }
+        const title = match?.title || null;
+        if (title) {
+          const cleaned = title.replace(/\s*[|–—]\s*Notion\s*$/, '').trim();
+          sendResponse({ title: cleaned || title });
+        } else {
+          sendResponse({ title: null });
+        }
+      });
       return true;
 
     default:

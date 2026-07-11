@@ -33,32 +33,36 @@ async function loadDocs() {
   const bridgeOk = await checkBridge();
   const statusBar = document.getElementById('status-bar');
 
-  if (!bridgeOk) {
-    document.getElementById('doc-tbody').innerHTML =
-      `<tr><td colspan="5" class="empty-state">
-        Bridge offline. <a href="#" id="retry-link">Retry</a> or
-        start with: <code>npx honoka-publish bridge</code>
-      </td></tr>`;
-    statusBar.textContent = 'Bridge offline — start honoka-publish bridge to view docs';
-    statusBar.className = 'status-bar err';
-    setLoading(false);
-
-    document.getElementById('retry-link')?.addEventListener('click', async (e) => {
-      e.preventDefault();
-      await loadDocs();
-    });
-    return;
-  }
-
-  statusBar.textContent = 'Bridge connected — loading docs...';
-  statusBar.className = 'status-bar ok';
-
+  // Always load docs (includes local tracking history from chrome.storage)
   allDocs = await fetchDocs();
 
-  statusBar.textContent = allDocs.length > 0
-    ? `Bridge online — ${allDocs.length} docs loaded`
-    : 'Bridge online — no docs found. Clip something!';
-  statusBar.className = 'status-bar ok';
+  if (bridgeOk) {
+    statusBar.textContent = allDocs.length > 0
+      ? `Bridge online — ${allDocs.length} docs loaded`
+      : 'Bridge online — no docs found. Clip something!';
+    statusBar.className = 'status-bar ok';
+  } else {
+    const trackedCount = allDocs.filter(d => d._tracked).length;
+    if (trackedCount > 0) {
+      statusBar.textContent = `Bridge offline — showing ${trackedCount} auto-tracked pages`;
+    } else {
+      document.getElementById('doc-tbody').innerHTML =
+        `<tr><td colspan="5" class="empty-state">
+          Bridge offline. <a href="#" id="retry-link">Retry</a> or
+          start with: <code>npx honoka-publish bridge</code>
+        </td></tr>`;
+      statusBar.textContent = 'Bridge offline — start honoka-publish bridge to view docs';
+      statusBar.className = 'status-bar err';
+      setLoading(false);
+
+      document.getElementById('retry-link')?.addEventListener('click', async (e) => {
+        e.preventDefault();
+        await loadDocs();
+      });
+      return;
+    }
+    statusBar.className = 'status-bar warn';
+  }
 
   // Update sidebar counts
   updateSidebarCounts(allDocs);

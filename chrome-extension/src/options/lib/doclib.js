@@ -1,6 +1,6 @@
 /**
  * Doc Library — doc listing, table rendering, search, sort, export.
- * Communicates with Bridge HTTP API for data.
+ * Communicates with Bridge HTTP API for data and merges local tracking history.
  */
 
 const BRIDGE_URL = 'http://127.0.0.1:44124';
@@ -19,19 +19,95 @@ const COLUMNS = [
 ];
 
 /**
- * Fetch docs from Bridge /api/docs.
+ * Fetch docs from Bridge /api/docs and merge with local tracking history.
  */
 export async function fetchDocs() {
+  let bridgeDocs = [];
   try {
     const resp = await fetch(`${BRIDGE_URL}/api/docs`);
     if (!resp.ok) throw new Error(`Bridge returned ${resp.status}`);
     const data = await resp.json();
-    allDocs = (data.docs || []).map(normalizeDoc);
-    return allDocs;
+    bridgeDocs = (data.docs || []).map(normalizeDoc);
   } catch (err) {
     console.warn('DocLib: Bridge fetch failed', err.message);
-    return [];
   }
+
+  // Load local tracking history from chrome.storage
+  const trackedDocs = await loadLocalHistory();
+
+  // Merge: Bridge docs first, then tracked entries (skip duplicates by URL)
+  const bridgeUrls = new Set();
+  for (const d of bridgeDocs) {
+    if (d.source) bridgeUrls.add(d.source);
+  }
+  const merged = [...bridgeDocs];
+  for (const t of trackedDocs) {
+    // Dedup: skip if this URL already exists in Bridge docs
+    const isDuplicate = bridgeDocs.some(d => d.source && t.source && d.source === t.source);
+    if (!isDuplicate) {
+      merged.push(t);
+    }
+  }
+
+  allDocs = merged;
+  return allDocs;
+}
+
+/**
+ * Load local Notion page tracking history from chrome.storage.
+ */
+async function loadLocalHistory() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['honoka_global_index'], (data) => {
+      const index = data.honoka_global_index || [];
+      if (index.length === 0) {
+        resolve([]);
+        return;
+      }
+      const pageKeys = index.map((id) => `honoka_page_${id}`);
+      chrome.storage.local.get(pageKeys, (pageData) => {
+        const entries = [];
+        for (const pageId of index) {
+          const entry = pageData[`honoka_page_${pageId}`];
+          if (!entry) continue;
+          entries.push({
+            _tracked: true,
+            _pageId: pageId,
+            title: entry.title || 'Untitled',
+            path: `_tracked/${pageId}`,
+            category: extractCategory(entry),
+            lastModified: entry.last_seen || entry.first_seen || new Date().toISOString(),
+            size: entry.token_snapshot || 0,
+            source: entry.url || '',
+            url: entry.url,
+            visit_count: entry.visit_count || 1,
+          });
+        }
+        resolve(entries);
+      });
+    });
+  });
+}
+
+function extractCategory(entry) {
+  if (entry.properties) {
+    const p = entry.properties;
+    if (p.category || p.Category) return p.category || p.Category;
+    if (p.status || p.Status) return p.status || p.Status;
+    if (p.type || p.Type) return p.type || p.Type;
+    if (p.tag || p.tags) return p.tag || (Array.isArray(p.tags) ? p.tags[0] : p.tags);
+  }
+  if (entry.api_properties) {
+    const ap = entry.api_properties;
+    for (const key of Object.keys(ap)) {
+      const lower = key.toLowerCase();
+      if (lower === 'category' || lower === 'type' || lower === 'status') {
+        const v = ap[key].value || ap[key];
+        if (v && typeof v === 'string') return v;
+      }
+    }
+  }
+  return 'Notion';
 }
 
 function normalizeDoc(d) {
@@ -127,34 +203,42 @@ function renderTable(docs) {
 
   if (docs.length === 0) {
     tbody.innerHTML = `<tr><td colspan="5" class="empty-state">${
-      searchQuery ? 'No docs match your search.' : 'No docs yet. Clip something!'
+      searchQuery ? 'No docs match your search.' : 'No docs found. Visit Notion pages to auto-track them, or clip something with the Bridge!' 
     }</td></tr>`;
     return;
   }
 
   tbody.innerHTML = docs.map(d => {
     const relTime = formatRelativeTime(d.lastModified);
-    const sizeStr = formatSize(d.size);
+    const sizeStr = d._tracked
+      ? (d.visit_count > 0 ? `${d.visit_count} visits` : '')
+      : formatSize(d.size);
     const catClass = 'cat-' + (d.category || 'uncategorized').replace(/\s+/g, '-').toLowerCase();
+    const trackedAttr = d._tracked ? ' data-tracked="true"' : '';
+    const urlAttr = d.url ? ` data-url="${escapeHtml(d.url)}"` : '';
     return `
-      <tr class="doc-row" data-path="${d.path}">
+      <tr class="doc-row" data-path="${d.path}"${trackedAttr}${urlAttr}>
         <td class="col-title">
-          <span class="doc-icon">📄</span>
+          <span class="doc-icon">${d._tracked ? '📝' : '📄'}</span>
           <span class="doc-name">${escapeHtml(d.title)}</span>
         </td>
         <td><span class="cat-badge ${catClass}">${escapeHtml(d.category || '')}</span></td>
         <td class="col-date" title="${d.lastModified}">${relTime}</td>
         <td class="col-size">${sizeStr}</td>
-        <td class="col-source" title="${escapeHtml(d.source || '')}">${formatSource(d.source)}</td>
+        <td class="col-source" title="${escapeHtml(d.source || '')}">${d._tracked ? 'Notion' : formatSource(d.source)}</td>
       </tr>
     `;
   }).join('');
 
-  // Bind row clicks
+  // Bind row clicks — tracked docs open Notion URL, Bridge docs open preview
   tbody.querySelectorAll('.doc-row').forEach(row => {
     row.addEventListener('click', () => {
       const path = row.dataset.path;
-      openPreview(path);
+      if (row.dataset.tracked === 'true' && row.dataset.url) {
+        window.open(row.dataset.url, '_blank');
+      } else if (path) {
+        openPreview(path);
+      }
     });
   });
 }

@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Honoka Lite",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "description": "Clip web pages and publish to Notion. Works standalone or with Honoka Bridge for advanced features.",
   "permissions": [
     "activeTab",
     "scripting",
     "storage",
     "contextMenus",
-    "downloads"
+    "downloads",
+    "history"
   ],
   "host_permissions": [
     "https://api.notion.com/*",
@@ -29,6 +30,19 @@
     }
   },
 
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.notion.so/*",
+        "https://*.notion.site/*",
+        "https://notion.so/*",
+        "https://*.notion.com/*",
+        "https://notion.com/*"
+      ],
+      "js": ["src/content/page-tracker.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "options_page": "src/options/options.html",
   "icons": {
     "16": "icons/icon16.png",

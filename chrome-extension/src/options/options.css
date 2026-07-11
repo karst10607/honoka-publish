@@ -485,3 +485,4 @@ html, body {
 }
 .status-bar.ok { color: var(--accent); }
 .status-bar.err { color: var(--danger); }
+.status-bar.warn { color: #f4b400; }
