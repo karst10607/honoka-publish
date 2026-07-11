@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.10.2
+
+- Multi-source web tracking: auto-record visits to GitHub, Jira, Confluence, Google Drive
+- Generic web tracker injected on matched domains via content_scripts
+- URL-based dedup: SHA-256 hash of normalized URL as stable storage key
+- Source-aware sidebar: History view shows all tracked entries
+- Source icons (🐙 🔧 📋 📁 ✈️ 💬 🔵 🌐) shown inline in doc list title and source column
+- Colored source badges in Source column for at-a-glance classification
+- Bridge: new `/api/tracking/entries` endpoint for extension to poll
+- Bridge: Telegram and Discord bot adapters record URL tracking entries
+- Bridge: lightweight URL title fetcher (og:title / <title>) for bot-processed links
+- Extension: auto-poll Bridge tracking entries via chrome.alarms (every 2 min)
+- Manual "🔄 Sync" button on options page to pull Bridge tracking entries
+- Bridge: telegramBotToken / discordBotToken configurable via API settings or env vars
+- Discord bot adapter (discord.js) following same pattern as Telegram
+
 ## v1.10.0
 
 - Auto-track Notion page visits (content script auto-injects on Notion pages)

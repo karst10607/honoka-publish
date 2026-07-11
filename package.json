@@ -1,6 +1,6 @@
 {
   "name": "honoka-publish",
-  "version": "1.10.0",
+  "version": "1.10.2",
   "description": "Publish local Markdown files to Notion. MCP server and Bridge HTTP server for AI tool and Chrome Extension integration.",
   "main": "index.js",
   "type": "commonjs",
@@ -30,6 +30,7 @@
   },
   "optionalDependencies": {
     "node-telegram-bot-api": "^0.67.0",
+    "discord.js": "^14.18.0",
     "playwright": "^1.59.0",
     "@mozilla/readability": "^0.6.0",
     "jsdom": "^29.1.0",
