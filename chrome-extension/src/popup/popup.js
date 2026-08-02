@@ -1,86 +1,37 @@
 /**
- * Popup script for Honoka Publish extension.
+ * Popup script for Honoka extension — MCP-only architecture.
+ * Shows extension's own feature status (tracking, current page).
+ * Sync happens via AI assistants (Antigravity/Codex/Claude Desktop) — no live MCP status.
  */
 document.addEventListener('DOMContentLoaded', async () => {
-  const clipBtn = document.getElementById('clipBtn');
-  const clipAndPushBtn = document.getElementById('clipAndPushBtn');
-  const urlInput = document.getElementById('urlInput');
-  const urlClipBtn = document.getElementById('urlClipBtn');
-  const resultDiv = document.getElementById('result');
-  const bridgeStatus = document.getElementById('bridgeStatus');
-  const statusText = document.getElementById('statusText');
+  const trackingStatus = document.getElementById('trackingStatus');
+  const trackedCount = document.getElementById('trackedCount');
+  const pageStatus = document.getElementById('pageStatus');
   const optionsLink = document.getElementById('optionsLink');
 
-  // Load status
-  const status = await chrome.runtime.sendMessage({ action: 'getStatus' });
-  updateStatus(status);
+  // ── Tracking status ──
+  const data = await chrome.storage.local.get(['honoka_global_index', 'honoka_tracking_disabled']);
+  const index = data.honoka_global_index || [];
+  trackedCount.textContent = String(index.length);
+  trackingStatus.textContent = data.honoka_tracking_disabled ? '已停用' : '啟用中';
+  trackingStatus.className = 'status-value ' + (data.honoka_tracking_disabled ? 'off' : 'on');
 
-  // Clip current page
-  clipBtn.addEventListener('click', async () => {
+  // ── Current page detection (Notion session for token budget) ──
+  try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab) return showResult('No active tab found', 'error');
-    await doClip(tab.id, false);
-  });
+    if (tab && tab.url && /notion\.(so|site)/.test(tab.url)) {
+      pageStatus.textContent = 'Notion 頁面 — Token budget 可用';
+      pageStatus.className = 'status-value on';
+    } else {
+      pageStatus.textContent = '非 Notion 頁面';
+      pageStatus.className = 'status-value';
+    }
+  } catch {
+    pageStatus.textContent = '無法偵測';
+  }
 
-  // Clip and push to Notion
-  clipAndPushBtn.addEventListener('click', async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab) return showResult('No active tab found', 'error');
-    await doClip(tab.id, true);
-  });
-
-  // Clip URL
-  urlClipBtn.addEventListener('click', async () => {
-    const url = urlInput.value.trim();
-    if (!url) return showResult('Enter a URL', 'error');
-    if (!url.startsWith('http')) return showResult('Invalid URL (must start with http)', 'error');
-    const result = await chrome.runtime.sendMessage({ action: 'clipUrl', url, pushToNotion: false });
-    handleClipResult(result);
-  });
-
-  urlInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') urlClipBtn.click();
-  });
-
-  // Options page
+  // ── Options page ──
   optionsLink.addEventListener('click', () => {
     chrome.runtime.openOptionsPage();
   });
-
-  async function doClip(tabId, pushToNotion) {
-    const result = await chrome.runtime.sendMessage({
-      action: 'clipPage',
-      tabId,
-      pushToNotion,
-    });
-    handleClipResult(result);
-  }
-
-  function handleClipResult(result) {
-    if (result.ok) {
-      let msg = `✅ Clipped: ${result.title}`;
-      if (result.slug) msg += `\n   Saved as: ${result.slug}.md`;
-      showResult(msg, 'success');
-    } else {
-      showResult(`❌ ${result.error}`, 'error');
-    }
-  }
-
-  function showResult(msg, type) {
-    resultDiv.textContent = msg;
-    resultDiv.className = `result ${type}`;
-    resultDiv.classList.remove('hidden');
-    setTimeout(() => resultDiv.classList.add('hidden'), 5000);
-  }
-
-  function updateStatus(status) {
-    if (status.bridgeAvailable) {
-      bridgeStatus.className = 'status-dot online';
-      bridgeStatus.title = `Bridge v${status.bridgeVersion}`;
-      statusText.textContent = `Bridge connected (v${status.bridgeVersion})`;
-    } else {
-      bridgeStatus.className = 'status-dot offline';
-      statusText.textContent = 'Bridge offline — files will download';
-    }
-  }
 });

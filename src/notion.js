@@ -27,7 +27,8 @@ const API_VERSION = "2022-06-28";
  */
 function notionFetch(method, path, { token, body, baseUrl } = {}) {
   return new Promise((resolve, reject) => {
-    const url = new URL(path, baseUrl || API_BASE);
+    const base = baseUrl || API_BASE;
+    const url = new URL(base + path);
     const opts = {
       hostname: url.hostname,
       port: url.port || 443,
@@ -158,14 +159,15 @@ async function clearPage(pageId, token) {
 /**
  * Query a database to find existing pages (e.g., by title or slug).
  * @param {string} databaseId
- * @param {object} filter - Notion filter object
+ * @param {object} filter - Notion filter object (optional)
  * @param {string} token
+ * @param {number} [pageSize] - Max results per page (default: 100)
  * @returns {Promise<object[]>}
  */
-async function queryDatabase(databaseId, filter, token) {
+async function queryDatabase(databaseId, filter, token, pageSize) {
   const data = await notionFetch("POST", `/databases/${databaseId}/query`, {
     token,
-    body: { filter },
+    body: { filter, page_size: pageSize || 100 },
   });
   return data.results || [];
 }

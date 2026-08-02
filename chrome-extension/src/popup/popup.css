@@ -46,7 +46,31 @@ header h1 {
 .status-dot.online { background: var(--success); box-shadow: 0 0 4px var(--success); }
 .status-dot.offline { background: var(--text-muted); }
 
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 12px;
+}
+
+.status-label { color: var(--text-muted); }
+
+.status-value { color: var(--text); font-weight: 500; }
+.status-value.on { color: var(--success); }
+.status-value.off { color: var(--error); }
+
 .section { margin-bottom: 12px; }
+
+.section.hint {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
 
 .btn {
   display: block;

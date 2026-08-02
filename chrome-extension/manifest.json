@@ -1,21 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Honoka Lite",
-  "version": "1.10.2",
-  "description": "Clip web pages and publish to Notion. Works standalone or with Honoka Bridge for advanced features.",
+  "version": "1.11.0",
+  "description": "Track Notion page visits, analyze token budgets. Works with Honoka MCP server for Notion sync.",
   "permissions": [
-    "activeTab",
-    "scripting",
     "storage",
-    "contextMenus",
-    "downloads",
     "history"
   ],
   "host_permissions": [
-    "https://api.notion.com/*",
     "https://*.notion.so/*",
-    "https://*.notion.site/*",
-    "http://127.0.0.1:44124/*"
+    "https://*.notion.site/*"
   ],
   "background": {
     "service_worker": "src/background.js",
@@ -29,7 +23,6 @@
       "128": "icons/icon128.png"
     }
   },
-
   "content_scripts": [
     {
       "matches": [
@@ -39,7 +32,9 @@
         "https://*.notion.com/*",
         "https://notion.com/*"
       ],
-      "js": ["src/content/page-tracker.js"],
+      "js": [
+        "src/content/page-tracker.js"
+      ],
       "run_at": "document_idle"
     },
     {
@@ -48,7 +43,9 @@
         "https://*.atlassian.net/*",
         "https://drive.google.com/*"
       ],
-      "js": ["src/content/web-tracker.js"],
+      "js": [
+        "src/content/web-tracker.js"
+      ],
       "run_at": "document_idle"
     }
   ],

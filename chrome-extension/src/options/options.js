@@ -4,7 +4,7 @@
  */
 import { initTheme } from './lib/themes.js';
 import { initSidebar, updateSidebarCounts, setLoading } from './lib/sidebar.js';
-import { fetchDocs, setFilter, initDocTable, checkBridge } from './lib/doclib.js';
+import { fetchDocs, setFilter, initDocTable } from './lib/doclib.js';
 
 let allDocs = [];
 let viewFilter = null;
@@ -20,8 +20,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 3. Init doc table (search, sort, export)
   initDocTable();
 
-  // 4. Init settings modal
-  initSettings();
+  // 4. Init MCP setup modal
+  initSetupModal();
 
   // 5. Load docs
   await loadDocs();
@@ -30,38 +30,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadDocs() {
   setLoading(true);
 
-  const bridgeOk = await checkBridge();
-  const statusBar = document.getElementById('status-bar');
-
-  // Always load docs (includes local tracking history from chrome.storage)
+  // MCP-only architecture: docs come from local tracking history (chrome.storage)
   allDocs = await fetchDocs();
+  const statusBar = document.getElementById('status-bar');
+  const trackedCount = allDocs.filter(d => d._tracked).length;
 
-  if (bridgeOk) {
-    statusBar.textContent = allDocs.length > 0
-      ? `Bridge online — ${allDocs.length} docs loaded`
-      : 'Bridge online — no docs found. Clip something!';
+  if (allDocs.length > 0) {
+    statusBar.textContent = trackedCount > 0
+      ? `${allDocs.length} docs — ${trackedCount} 頁面來自 Notion 追蹤`
+      : `${allDocs.length} docs`;
     statusBar.className = 'status-bar ok';
   } else {
-    const trackedCount = allDocs.filter(d => d._tracked).length;
-    if (trackedCount > 0) {
-      statusBar.textContent = `Bridge offline — showing ${trackedCount} auto-tracked pages`;
-    } else {
-      document.getElementById('doc-tbody').innerHTML =
-        `<tr><td colspan="5" class="empty-state">
-          Bridge offline. <a href="#" id="retry-link">Retry</a> or
-          start with: <code>npx honoka-publish bridge</code>
-        </td></tr>`;
-      statusBar.textContent = 'Bridge offline — start honoka-publish bridge to view docs';
-      statusBar.className = 'status-bar err';
-      setLoading(false);
-
-      document.getElementById('retry-link')?.addEventListener('click', async (e) => {
-        e.preventDefault();
-        await loadDocs();
-      });
-      return;
-    }
+    document.getElementById('doc-tbody').innerHTML =
+      `<tr><td colspan="5" class="empty-state">
+        尚未有追蹤記錄。開啟 Notion 頁面即會自動記錄，
+        或透過 AI 助理（Antigravity / Codex / Claude Desktop）用 honoka 工具管理文件庫。
+      </td></tr>`;
+    statusBar.textContent = '本機追蹤模式 — 無文件';
     statusBar.className = 'status-bar warn';
+    setLoading(false);
+    return;
   }
 
   // Update sidebar counts
@@ -82,53 +70,31 @@ function handleViewChange(filterFn) {
   setFilter(filterFn);
 }
 
-// ══ Settings Modal ══
+// ══ MCP Setup Modal ══
 
-function initSettings() {
+function initSetupModal() {
   const modal = document.getElementById('settings-modal');
   const closeBtn = document.getElementById('modal-close');
-  const saveBtn = document.getElementById('saveBtn');
+  const copyBtn = document.getElementById('copy-prompt');
+  const promptArea = document.getElementById('setup-prompt');
   const saveStatus = document.getElementById('saveStatus');
 
-  // Load settings
-  chrome.runtime.sendMessage({ action: 'getSettings' }).then(resp => {
-    if (!resp) return;
-    document.getElementById('bridgeUrl').value = resp.settings.bridgeUrl || '';
-    document.getElementById('notionPat').value = resp.settings.notionPat || '';
-    document.getElementById('notionDatabaseId').value = resp.settings.notionDatabaseId || '';
-    document.getElementById('autoPush').checked = resp.settings.autoPush || false;
-  });
-
   // Close modal
-  closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
-  modal.addEventListener('click', (e) => {
+  closeBtn?.addEventListener('click', () => modal.classList.add('hidden'));
+  modal?.addEventListener('click', (e) => {
     if (e.target === modal) modal.classList.add('hidden');
   });
 
-  // Save
-  saveBtn.addEventListener('click', async () => {
-    const settings = {
-      bridgeUrl: document.getElementById('bridgeUrl').value.trim() || 'http://127.0.0.1:44124',
-      notionPat: document.getElementById('notionPat').value.trim(),
-      notionDatabaseId: document.getElementById('notionDatabaseId').value.trim(),
-      autoPush: document.getElementById('autoPush').checked,
-    };
-
+  // Copy the AI prompt to clipboard
+  copyBtn?.addEventListener('click', async () => {
     try {
-      const result = await chrome.runtime.sendMessage({ action: 'saveSettings', settings });
-      if (result.ok) {
-        saveStatus.textContent = 'Saved!';
-        saveStatus.style.color = 'var(--accent)';
-        modal.classList.add('hidden');
-      } else {
-        saveStatus.textContent = 'Error: ' + (result.error || 'unknown');
-        saveStatus.style.color = 'var(--danger)';
-      }
-    } catch (err) {
-      saveStatus.textContent = 'Error: ' + err.message;
-      saveStatus.style.color = 'var(--danger)';
+      await navigator.clipboard.writeText(promptArea.value);
+      saveStatus.textContent = '✅ 已複製，貼給你的 AI 助理！';
+    } catch {
+      promptArea.select();
+      document.execCommand('copy');
+      saveStatus.textContent = '✅ 已複製，貼給你的 AI 助理！';
     }
-
-    setTimeout(() => { saveStatus.textContent = ''; }, 3000);
+    setTimeout(() => { saveStatus.textContent = ''; }, 4000);
   });
 }

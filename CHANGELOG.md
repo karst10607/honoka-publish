@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.11.0
+
+- **MCP-only architecture**: Bridge daemon removed — Chrome Extension no longer depends on HTTP bridge; sync happens via AI assistants (Antigravity / Codex / Claude Desktop) using MCP stdio
+- **New MCP tool**: `query-notion` — list / title-search pages in a Notion database
+- **MCP tool aliases**: `read_doc` (→ read-clip), `save_and_sync` (→ save-and-push) snake_case variants
+- **AnyType full CRUD via MCP**: `sync_to_anytype` / `search_anytype` / `read_anytype` / `delete_anytype` (creds via env or args)
+- **New CLI**: `honoka-setup` — interactive MCP installer; detects Antigravity / Codex / Claude Desktop configs and writes the honoka entry (with backup)
+- **Extension simplified**: removed clipper + Bridge polling; pure frontend (page tracking + token budget)
+- **Popup**: shows own-feature status (tracking on/off, tracked count, Notion page detection) instead of Bridge status
+- **Options page**: MCP Setup guide (3 steps + copy-paste AI prompt); removed Bridge URL / Notion PAT / auto-push settings and Sync button
+- **Manifest**: permissions reduced to `storage` + `history`; host permissions to notion.so / notion.site
+- **Fix**: list-docs / findClipBySlug directory depth limits (3/4 → 8)
+- **Fix**: Notion URL construction dropped `/v1` prefix → 400 errors (now `new URL(base + path)`)
+- **Docs**: `docs/mcp-configs.md` — MCP config examples for Antigravity / Claude Desktop / Codex
+
 ## v1.10.2
 
 - Multi-source web tracking: auto-record visits to GitHub, Jira, Confluence, Google Drive

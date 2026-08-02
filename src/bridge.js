@@ -65,7 +65,88 @@ function slugify(text) {
     .substring(0, 80);
 }
 
-// ── Settings (persisted as JSON in HONOKA_DIR) ──
+// ── Tracking entries store ──────────────────────────────────────────
+
+const TRACKING_FILE = path.join(HONOKA_DIR, ".honoka", "tracking.json");
+
+function ensureTrackingDir() {
+  fs.mkdirSync(path.dirname(TRACKING_FILE), { recursive: true });
+}
+
+function loadTrackingEntries() {
+  try {
+    return JSON.parse(fs.readFileSync(TRACKING_FILE, "utf8"));
+  } catch {
+    return [];
+  }
+}
+
+function saveTrackingEntries(entries) {
+  ensureTrackingDir();
+  fs.writeFileSync(TRACKING_FILE, JSON.stringify(entries, null, 2), "utf8");
+}
+
+function recordTrackingEntry({ source, title, url }) {
+  const entries = loadTrackingEntries();
+  const id = `${source}_${Date.now()}`;
+  const entry = { id, source, title: title || url || "", url: url || "", ts: new Date().toISOString() };
+
+  // Dedup: same URL from same source within 30s → just update ts
+  const existing = entries.find(
+    (e) => e.source === source && e.url === url && Date.now() - new Date(e.ts).getTime() < 30000
+  );
+  if (existing) {
+    existing.ts = entry.ts;
+    if (!existing.title || existing.title === existing.url) existing.title = entry.title;
+  } else {
+    entries.push(entry);
+  }
+
+  // Cap at 500 entries
+  if (entries.length > 500) {
+    entries.splice(0, entries.length - 500);
+  }
+
+  saveTrackingEntries(entries);
+  return entry;
+}
+
+// ── Lightweight URL title fetcher (og:title + fallback) ─────────────
+
+async function fetchUrlTitle(url) {
+  try {
+    const http = url.startsWith("https") ? require("https") : require("http");
+    return new Promise((resolve) => {
+      const req = http.get(url, { timeout: 8000 }, (res) => {
+        let data = "";
+        res.on("data", (chunk) => { data += chunk.toString("utf8").slice(0, 65536); });
+        res.on("end", () => {
+          // Try og:title
+          const ogMatch = data.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i);
+          if (ogMatch) return resolve(ogMatch[1]);
+          // Try <title>
+          const titleMatch = data.match(/<title>([^<]+)<\/title>/i);
+          if (titleMatch) return resolve(titleMatch[1].trim());
+          resolve(null);
+        });
+      });
+      req.on("error", () => resolve(null));
+      req.on("timeout", () => { req.destroy(); resolve(null); });
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function handleTrackingEntries(req, res) {
+  const url = new URL(req.url, `http://localhost:${DEFAULT_PORT}`);
+  const since = url.searchParams.get("since");
+  let entries = loadTrackingEntries();
+  if (since) {
+    entries = entries.filter((e) => e.ts > since);
+  }
+  json(res, 200, { entries, count: entries.length });
+}
 
 const SETTINGS_FILE = path.join(HONOKA_DIR, ".honoka", "bridge-settings.json");
 
@@ -101,7 +182,9 @@ function handleStatus(req, res, port) {
     pid: process.pid,
     integrations: {
       notion: !!(settings.notionPat || process.env.NOTION_TOKEN),
-      anytype: !!settings.anytypeApiKey,
+      notetype: !!settings.anytypeApiKey,
+      telegram: false,
+      discord: false,
     },
   });
 }
@@ -247,7 +330,7 @@ function handleSettingsGet(req, res) {
 async function handleSettingsPost(req, res) {
   try {
     const body = await readBody(req);
-    const ALLOWED = ["notionPat", "notionDatabaseId", "anytypeApiKey", "anytypeSpaceId", "anytypeApiUrl"];
+    const ALLOWED = ["notionPat", "notionDatabaseId", "anytypeApiKey", "anytypeSpaceId", "anytypeApiUrl", "telegramBotToken", "telegramAllowedUser", "discordBotToken", "discordAllowedChannel"];
     const toSave = {};
     for (const key of ALLOWED) {
       if (key in body) toSave[key] = body[key];
@@ -256,6 +339,36 @@ async function handleSettingsPost(req, res) {
     json(res, 200, { ok: true, changed: Object.keys(toSave).length > 0 });
   } catch (err) {
     json(res, 400, { error: err.message });
+  }
+}
+
+async function handleHistoryIngest(req, res) {
+  try {
+    const body = await readBody(req);
+    const { pageId, title, url, source, first_seen, last_seen, visit_count } = body;
+    const entry = recordTrackingEntry({
+      source: source || detectSourceFromUrl(url),
+      title: title || url || "",
+      url: url || "",
+    });
+    json(res, 200, { ok: true, id: entry.id });
+  } catch (err) {
+    json(res, 400, { error: err.message });
+  }
+}
+
+function detectSourceFromUrl(url) {
+  try {
+    const u = new URL(url);
+    const h = u.hostname;
+    if (h === "github.com" || h.endsWith(".github.com")) return "github";
+    if (h.endsWith("atlassian.net") || h.includes("jira")) return "jira";
+    if (h.includes("confluence")) return "confluence";
+    if (h === "drive.google.com") return "google_drive";
+    if (h.includes("notion.")) return "notion";
+    return "web";
+  } catch {
+    return "web";
   }
 }
 
@@ -331,6 +444,9 @@ function createServer(port = DEFAULT_PORT) {
       if (route === "/api/settings" && req.method === "POST") return await handleSettingsPost(req, res);
       if (route === "/api/docs" && req.method === "GET") return handleList(req, res);
 
+      if (route === "/api/tracking/entries" && req.method === "GET") return handleTrackingEntries(req, res);
+      if (route === "/history/ingest" && req.method === "POST") return await handleHistoryIngest(req, res);
+
       // Legacy endpoints (old Bridge compatibility)
       if (route === "/save" && req.method === "POST") return await handleSave(req, res);
       if (route === "/list" && req.method === "GET") return handleList(req, res);
@@ -366,6 +482,34 @@ function createServer(port = DEFAULT_PORT) {
 
 function runBridge(port = DEFAULT_PORT) {
   const server = createServer(port);
+
+  // ── Start IM bots ──
+  const settings = loadSettings();
+
+  // Telegram
+  const { startBot: startTelegram } = require("./integrations/telegram");
+  startTelegram({
+    token: settings.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN || "",
+    allowedUser: settings.telegramAllowedUser || process.env.TELEGRAM_ALLOWED_USER || "",
+    onUrl: async (url) => {
+      const title = await fetchUrlTitle(url);
+      recordTrackingEntry({ source: "telegram", title: title || url, url });
+      console.log(`  [Tracking] Telegram: ${title || url}`);
+    },
+  });
+
+  // Discord
+  const { startBot: startDiscord } = require("./integrations/discord");
+  startDiscord({
+    token: settings.discordBotToken || process.env.DISCORD_BOT_TOKEN || "",
+    allowedChannel: settings.discordAllowedChannel || process.env.DISCORD_ALLOWED_CHANNEL || "",
+    onUrl: async (url) => {
+      const title = await fetchUrlTitle(url);
+      recordTrackingEntry({ source: "discord", title: title || url, url });
+      console.log(`  [Tracking] Discord: ${title || url}`);
+    },
+  });
+
   server.listen(port, "127.0.0.1", () => {
     console.error(`[honoka-publish] Bridge server running on http://127.0.0.1:${port}`);
     console.error(`[honoka-publish] Docs directory: ${HONOKA_DIR}`);

@@ -36,14 +36,9 @@ export async function fetchDocs() {
   const trackedDocs = await loadLocalHistory();
 
   // Merge: Bridge docs first, then tracked entries (skip duplicates by URL)
-  const bridgeUrls = new Set();
-  for (const d of bridgeDocs) {
-    if (d.source) bridgeUrls.add(d.source);
-  }
   const merged = [...bridgeDocs];
   for (const t of trackedDocs) {
-    // Dedup: skip if this URL already exists in Bridge docs
-    const isDuplicate = bridgeDocs.some(d => d.source && t.source && d.source === t.source);
+    const isDuplicate = bridgeDocs.some(d => d.url && t.url && d.url === t.url);
     if (!isDuplicate) {
       merged.push(t);
     }
@@ -78,7 +73,7 @@ async function loadLocalHistory() {
             category: extractCategory(entry),
             lastModified: entry.last_seen || entry.first_seen || new Date().toISOString(),
             size: entry.token_snapshot || 0,
-            source: entry.url || '',
+            source: entry.source || (entry.url ? formatSource(entry.url) : ''),
             url: entry.url,
             visit_count: entry.visit_count || 1,
           });
@@ -109,6 +104,32 @@ function extractCategory(entry) {
   }
   return 'Notion';
 }
+
+// ── Source icon map ─────────────────────────────────────────────────
+
+const SOURCE_ICONS = {
+  notion: '📝',
+  github: '🐙',
+  jira: '🔧',
+  confluence: '📋',
+  google_drive: '📁',
+  telegram: '✈️',
+  discord: '💬',
+  anytype: '🔵',
+  web: '🌐',
+};
+
+const SOURCE_LABELS = {
+  notion: 'Notion',
+  github: 'GitHub',
+  jira: 'Jira',
+  confluence: 'Confluence',
+  google_drive: 'Google Drive',
+  telegram: 'Telegram',
+  discord: 'Discord',
+  anytype: 'AnyType',
+  web: 'Web',
+};
 
 function normalizeDoc(d) {
   return {
@@ -216,16 +237,20 @@ function renderTable(docs) {
     const catClass = 'cat-' + (d.category || 'uncategorized').replace(/\s+/g, '-').toLowerCase();
     const trackedAttr = d._tracked ? ' data-tracked="true"' : '';
     const urlAttr = d.url ? ` data-url="${escapeHtml(d.url)}"` : '';
+    const sourceName = d._tracked ? getSourceLabel(d.source) : formatSource(d.source);
+    const sourceIcon = d._tracked ? getSourceIcon(d.source) : '📄';
     return `
       <tr class="doc-row" data-path="${d.path}"${trackedAttr}${urlAttr}>
         <td class="col-title">
-          <span class="doc-icon">${d._tracked ? '📝' : '📄'}</span>
+          <span class="doc-icon">${d._tracked ? sourceIcon : '📄'}</span>
           <span class="doc-name">${escapeHtml(d.title)}</span>
         </td>
         <td><span class="cat-badge ${catClass}">${escapeHtml(d.category || '')}</span></td>
         <td class="col-date" title="${d.lastModified}">${relTime}</td>
         <td class="col-size">${sizeStr}</td>
-        <td class="col-source" title="${escapeHtml(d.source || '')}">${d._tracked ? 'Notion' : formatSource(d.source)}</td>
+        <td class="col-source">${d._tracked
+          ? `<span class="source-badge src-${escapeHtml(d.source || 'web')}">${sourceIcon} ${escapeHtml(sourceName)}</span>`
+          : formatSource(d.source)}</td>
       </tr>
     `;
   }).join('');
@@ -360,4 +385,12 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+function getSourceIcon(source) {
+  return SOURCE_ICONS[source] || '📄';
+}
+
+function getSourceLabel(source) {
+  return SOURCE_LABELS[source] || source || 'Unknown';
 }

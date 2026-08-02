@@ -13,10 +13,6 @@
     <aside class="sidebar">
       <div class="sidebar-header">
         <strong>Honoka</strong>
-        <span class="bridge-dot-wrap">
-          <span id="bridge-dot" class="bridge-dot checking" title="Bridge: checking..."></span>
-          <div id="bridge-popover" class="bridge-popover hidden"></div>
-        </span>
       </div>
 
       <div class="sidebar-views" id="sidebar-views"></div>
@@ -58,7 +54,7 @@
             </tr>
           </thead>
           <tbody id="doc-tbody">
-            <tr><td colspan="5" class="empty-state">Connecting to Bridge...</td></tr>
+            <tr><td colspan="5" class="empty-state">Loading...</td></tr>
           </tbody>
         </table>
       </div>
@@ -67,39 +63,48 @@
     </main>
   </div>
 
-  <!-- ══ SETTINGS MODAL ══ -->
+  <!-- ══ MCP SETUP MODAL ══ -->
   <div id="settings-modal" class="modal-overlay hidden">
     <div class="modal-content">
-      <h2>Settings</h2>
-
-      <div class="form-group">
-        <label>Bridge URL</label>
-        <input type="text" id="bridgeUrl" placeholder="http://127.0.0.1:44124">
-        <div class="desc">Local Bridge server for doc management.</div>
+      <h2>MCP Setup</h2>
+      <div class="desc" style="margin-bottom:10px;">
+        讓你的 AI 助理（Antigravity / Codex / Claude Desktop）能讀寫你的文件庫與 Notion。
+        設定一次即可，之後在對話中直接說「用 honoka 存到 Notion」就會自動同步。
       </div>
 
-      <div class="form-group">
-        <label>Notion PAT</label>
-        <input type="password" id="notionPat" placeholder="secret_...">
-        <div class="desc">Create at <a href="https://www.notion.so/my-integrations" target="_blank">notion.so/my-integrations</a></div>
+      <div class="setup-step">
+        <span class="setup-num">1</span>
+        <div>
+          <strong>建立 Notion integration</strong>
+          <div class="desc">到 <a href="https://www.notion.so/my-integrations" target="_blank">notion.so/my-integrations</a> 建立，並分享你的 database 給它，取得 token 與 database ID。</div>
+        </div>
       </div>
 
-      <div class="form-group">
-        <label>Notion Database ID</label>
-        <input type="text" id="notionDatabaseId" placeholder="32-char UUID">
+      <div class="setup-step">
+        <span class="setup-num">2</span>
+        <div>
+          <strong>讓 AI 幫你完成安裝</strong>
+          <div class="desc">把下面這段話複製，貼給你的 AI 助理：</div>
+          <textarea id="setup-prompt" readonly rows="6" style="width:100%; margin-top:6px; font-family:monospace; font-size:12px; background:#111; color:var(--text); border:1px solid var(--border); border-radius:4px; padding:8px;">幫我設定 Honoka MCP：
+1. 執行 npx -y honoka-setup（互動安裝器）
+2. 我會提供 Notion token 和 database ID（也支援 AnyType）
+3. 安裝器會自動偵測並寫入我的 MCP config（Antigravity / Codex / Claude Desktop）
+4. 完成後告訴我重新啟動你</textarea>
+          <button class="btn btn-sm" id="copy-prompt" style="margin-top:6px;">📋 複製指令</button>
+        </div>
       </div>
 
-      <div class="form-group">
-        <label>
-          <input type="checkbox" id="autoPush">
-          Auto-push to Notion on every clip
-        </label>
+      <div class="setup-step">
+        <span class="setup-num">3</span>
+        <div>
+          <strong>重啟 AI 助理</strong>
+          <div class="desc">完全退出並重新打開你的 AI 助理，honoka 工具就會出現（list-docs / save_and_sync / query-notion / sync_to_anytype 等）。</div>
+        </div>
       </div>
 
       <div class="modal-actions">
         <div style="flex:1; font-size:12px; color:var(--text-muted); align-self:center;" id="saveStatus"></div>
-        <button class="btn btn-sm" id="modal-close">Cancel</button>
-        <button class="btn btn-sm btn-primary" id="saveBtn">Save</button>
+        <button class="btn btn-sm" id="modal-close">Close</button>
       </div>
     </div>
   </div>

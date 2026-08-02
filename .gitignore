@@ -6,3 +6,7 @@ node_modules/
 # Chrome extension build
 chrome-extension/build/
 
+
+# Dev sanity scripts
+mcp-sanity.cjs
+test-notion.cjs

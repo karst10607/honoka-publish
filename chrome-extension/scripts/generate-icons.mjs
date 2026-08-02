@@ -40,7 +40,7 @@ def create_icon(size, path):
 
 sizes = [16, 48, 128]
 for s in sizes:
-    create_icon(s, f'{icons_dir}/icon{s}.png')
+    create_icon(s, f'\${icons_dir}/icon{s}.png')
     print(f'Generated icon{s}.png ({s}x{s})')
 `;
 

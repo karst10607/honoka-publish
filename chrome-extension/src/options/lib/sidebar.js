@@ -24,7 +24,6 @@ export function initSidebar(onSelect) {
   onSelectView = onSelect;
   renderViews();
   renderThemeSwitcher();
-  bindBridgeStatus();
   bindSettingsBtn();
   bindEvents();
 }
@@ -122,33 +121,6 @@ function renderThemeSwitcher() {
       ${emojis[n] || '●'}
     </div>
   `).join('');
-}
-
-function bindBridgeStatus() {
-  const dot = document.getElementById('bridge-dot');
-  const popover = document.getElementById('bridge-popover');
-  if (!dot || !popover) return;
-
-  // Check Bridge health periodically
-  async function check() {
-    try {
-      const resp = await fetch('http://127.0.0.1:44124/status');
-      const data = await resp.json();
-      dot.className = 'bridge-dot online';
-      dot.title = 'Bridge Online v' + (data.version || '');
-    } catch {
-      dot.className = 'bridge-dot offline';
-      dot.title = 'Bridge Offline';
-    }
-  }
-  check();
-  setInterval(check, 30000);
-
-  dot.addEventListener('click', (e) => {
-    popover.classList.toggle('hidden');
-    e.stopPropagation();
-  });
-  document.addEventListener('click', () => popover.classList.add('hidden'));
 }
 
 function bindSettingsBtn() {

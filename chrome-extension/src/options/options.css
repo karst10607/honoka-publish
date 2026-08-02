@@ -375,6 +375,27 @@ html, body {
 .cat-inbox { background: #3a2a1a; color: #f0b87e; }
 .cat-uncategorized { background: var(--border); color: var(--text-muted); }
 
+/* ── Source badges ── */
+.source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.src-notion { background: #1a2a4a; color: #7cb8ff; }
+.src-github { background: #1a2a1a; color: #7ee7b0; }
+.src-jira { background: #2a1a3a; color: #b87ee7; }
+.src-confluence { background: #1a2a3a; color: #7ec8e7; }
+.src-google_drive { background: #2a3a1a; color: #c8e77e; }
+.src-telegram { background: #1a3a3a; color: #7ee7e7; }
+.src-discord { background: #2a1a2a; color: #b87eb8; }
+.src-anytype { background: #1a1a3a; color: #7e7ef7; }
+.src-web { background: var(--border); color: var(--text-muted); }
+
 .empty-state {
   text-align: center;
   padding: 48px 24px;
@@ -486,3 +507,27 @@ html, body {
 .status-bar.ok { color: var(--accent); }
 .status-bar.err { color: var(--danger); }
 .status-bar.warn { color: #f4b400; }
+
+/* ══ MCP Setup Modal ══ */
+.setup-step {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+  align-items: flex-start;
+}
+.setup-num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent, #4db8ff);
+  color: #000;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.setup-step .desc {
+  margin-top: 2px;
+}
