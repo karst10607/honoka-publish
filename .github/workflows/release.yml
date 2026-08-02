@@ -32,7 +32,7 @@ jobs:
       - name: Sync manifest version from git tag
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          export VERSION="${GITHUB_REF_NAME#v}"
           echo "Syncing extension version to $VERSION"
           node -e "
             const fs = require('fs');
@@ -57,9 +57,8 @@ jobs:
             icons/icon48.png
             icons/icon128.png
             src/background.js
-            src/content/clipper.js
-            src/lib/notion.js
-            src/lib/bridge.js
+            src/content/page-tracker.js
+            src/content/web-tracker.js
             src/lib/markdown.js
             src/popup/popup.html
             src/popup/popup.js
@@ -67,6 +66,9 @@ jobs:
             src/options/options.html
             src/options/options.js
             src/options/options.css
+            src/options/lib/themes.js
+            src/options/lib/sidebar.js
+            src/options/lib/doclib.js
           )
           VERSION="${GITHUB_REF_NAME#v}"
           zip -r "build/honoka-publish-v${VERSION}.zip" "${FILES[@]}"
@@ -95,7 +97,7 @@ jobs:
       - name: Extract changelog for this version
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          export VERSION="${GITHUB_REF_NAME#v}"
           node -e "
             const fs = require('fs');
             const md = fs.readFileSync('CHANGELOG.md','utf8');
