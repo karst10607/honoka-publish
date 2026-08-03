@@ -94,6 +94,28 @@ jobs:
           name: honoka-publish-extension
           path: release-assets
 
+      - name: Setup Node.js (for npm publish)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish to npm
+        shell: bash
+        run: |
+          export VERSION="${GITHUB_REF_NAME#v}"
+          node -e "
+            const fs = require('fs');
+            const V = process.env.VERSION;
+            let p = JSON.parse(fs.readFileSync('package.json','utf8'));
+            p.version = V;
+            fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n');
+            console.log('package.json version synced to', V);
+          "
+          npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Extract changelog for this version
         shell: bash
         run: |
@@ -101,7 +123,7 @@ jobs:
           node -e "
             const fs = require('fs');
             const md = fs.readFileSync('CHANGELOG.md','utf8');
-            const lines = md.split('\n');
+            const lines = md.split('\n').map(l => l.trimEnd());
             const marker = '## v' + process.env.VERSION;
             let start = -1, end = lines.length;
             for (let i = 0; i < lines.length; i++) {
