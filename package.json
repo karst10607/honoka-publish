@@ -5,8 +5,8 @@
   "main": "index.js",
   "type": "commonjs",
   "bin": {
-    "honoka-publish": "./bin/honoka-publish.js",
-    "honoka-setup": "./bin/honoka-setup.js"
+    "honoka-publish": "bin/honoka-publish.js",
+    "honoka-setup": "bin/honoka-setup.js"
   },
   "engines": {
     "node": ">=18.0.0"
