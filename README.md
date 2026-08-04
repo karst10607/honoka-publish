@@ -44,21 +44,6 @@ npx honoka-publish --init
 6. Appends content blocks to the page
 7. Updates the registry for future incremental runs
 
-## Pricing
-
-| Feature | Free | Pro ($9/mo) |
-|---------|------|-------------|
-| Single directory sync | ✅ | ✅ |
-| File watcher | ✅ | ✅ |
-| Notion create/update | ✅ | ✅ |
-| Image upload | ✅ | ✅ |
-| Recursive (nested) sync | ❌ | ✅ |
-| Multi-directory watch | ❌ | ✅ |
-| Multi-platform sync | ❌ | ✅ |
-| Git auto-commit | ❌ | ✅ |
-
-Pro is gated by a license key. Get one at https://honoka.dev (coming soon).
-
 ## Integrations
 
 - **Anytype** — Auto-publish to Anytype collections alongside Notion
