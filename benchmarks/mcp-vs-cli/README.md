@@ -34,7 +34,8 @@ Extension-ready (see below): Notion API call count, LLM token usage.
 ## Reproduction (two sentences)
 
 `git clone` the repo, set `NOTION_TOKEN` and `NOTION_DATABASE`, then run
-`bash benchmarks/mcp-vs-cli/run.sh` — it generates 50 docs with images, syncs them
+`bash benchmarks/mcp-vs-cli/run.sh` — it generates 50 docs (images are opt-in
+via `--images`, off by default; see the relative-URL limitation below), syncs them
 once via the CLI and once via MCP tools per round (3 rounds by default), and writes
 `results/summary.csv` plus every raw transcript to `results/raw/`. Every number in
 the write-up is that script's output on a fresh checkout.
