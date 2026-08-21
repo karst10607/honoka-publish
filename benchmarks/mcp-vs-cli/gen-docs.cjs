@@ -2,10 +2,13 @@
 "use strict";
 /**
  * Generates the benchmark corpus: N Markdown docs with frontmatter, headings,
- * lists, code blocks, links, and one local PNG image each.
+ * lists, code blocks, links). Images are opt-in (--images).
  * The corpus is regenerated fresh on every run (rm + mkdir).
  *
- * Usage: node gen-docs.mjs --count 50 --out work/docs [--no-images]
+ * Usage: node gen-docs.cjs --count 50 --out work/docs [--images]
+ * Images are opt-in: the corpus defaults to no images because honoka-publish's
+ * markdown path emits relative asset URLs (assets/img.png) which the Notion
+ * API rejects with HTTP 400 (see README Limitations).
  */
 const fs = require("fs");
 const path = require("path");
@@ -14,7 +17,7 @@ const args = process.argv.slice(2);
 const idx = (k) => args.indexOf(k);
 const count = Number(idx("--count") >= 0 ? args[idx("--count") + 1] : 50);
 const out = path.resolve(idx("--out") >= 0 ? args[idx("--out") + 1] : path.join(__dirname, "work", "docs"));
-const withImages = !args.includes("--no-images");
+const withImages = args.includes("--images");
 
 // 1x1 transparent PNG — tiny, valid, reproducible image workload
 const PNG_1PX = Buffer.from(
@@ -49,7 +52,8 @@ function body(i, withImages) {
   lines.push("- item two");
   lines.push("- item three");
   lines.push("");
-  lines.push("```js");
+  // "javascript" — Notion API rejects "js" as a code language (400 body validation)
+  lines.push("```javascript");
   lines.push(`const id = ${i};`);
   lines.push("const ok = id > 0;");
   lines.push("```");

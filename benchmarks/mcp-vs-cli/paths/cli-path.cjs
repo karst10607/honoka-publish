@@ -2,7 +2,8 @@
 "use strict";
 /**
  * Path A: honoka-publish CLI — one-shot sync of the generated corpus.
- * Measures wall time and exit code; captures stdout/stderr for the transcript.
+ * Measures wall time, per-doc success/skip/error counts (parsed from the
+ * CLI's summary line), and exit code; captures stdout/stderr for the transcript.
  *
  * Usage: node paths/cli-path.cjs --round 1
  */
@@ -33,12 +34,22 @@ child.stderr.on("data", (d) => (err += d));
 
 child.on("close", (code) => {
   const wallMs = Math.round(performance.now() - t0);
+  // "Done. N synced, M skipped, K errors." (src/cli.js) — synced+skipped are
+  // docs that ended up in sync; errors are docs the Notion API rejected.
+  const m = out.match(/Done\.\s*(\d+)\s+synced,\s*(\d+)\s+skipped,\s*(\d+)\s+errors\./);
+  const synced = m ? Number(m[1]) : 0;
+  const skipped = m ? Number(m[2]) : 0;
+  const errors = m ? Number(m[3]) : 0;
   const result = {
     round: Number(round),
     path: "cli",
     wallMs,
     exitCode: code,
-    ok: code === 0,
+    ok: synced + skipped,
+    fail: errors,
+    skipped,
+    docs: synced + skipped + errors,
+    summaryParsed: !!m,
     stdoutTail: out.slice(-2000),
     stderrTail: err.slice(-2000),
   };

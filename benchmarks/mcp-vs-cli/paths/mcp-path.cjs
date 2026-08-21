@@ -2,8 +2,9 @@
 "use strict";
 /**
  * Path B: drive honoka-publish's MCP server over stdio (JSON-RPC), calling
- * save-clip once per generated doc. Measures wall time, per-doc latency,
- * and success/failure per call.
+ * save-and-push once per generated doc (local save + Notion push — the same
+ * work the CLI sync does). Measures wall time, per-doc latency, and
+ * success/failure per call.
  *
  * Usage: node paths/mcp-path.cjs --round 1
  */
@@ -102,7 +103,7 @@ mcp.stdout.on("data", (chunk) => {
       id,
       method: "tools/call",
       params: {
-        name: "save-clip",
+        name: "save-and-push",
         arguments: {
           title: fm.title || file,
           markdown: body,
@@ -117,10 +118,12 @@ mcp.stdout.on("data", (chunk) => {
       const isErr = !!res.error || res.result?.isError;
       if (isErr) {
         fail++;
+        const rawErr = res.error || res.result?.content?.[0]?.text || "error";
+        const errText = typeof rawErr === "object" ? rawErr.message || JSON.stringify(rawErr) : String(rawErr);
         failures.push({
           file,
           latency,
-          error: (res.error || res.result?.content?.[0]?.text || "error").toString().slice(0, 200),
+          error: errText.slice(0, 200),
         });
       } else {
         ok++;

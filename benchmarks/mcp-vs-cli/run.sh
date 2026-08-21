@@ -31,6 +31,10 @@ fi
 COUNT="${COUNT:-50}"
 ROUNDS="${ROUNDS:-3}"
 
+# Isolate MCP local clips + its Notion registry inside the benchmark workdir
+# (default would be ~/honoka-docs — we keep the run fully reproducible)
+export HONOKA_DIR="$(pwd)/work/honoka"
+
 mkdir -p results/raw
 node gen-docs.cjs --count "$COUNT" --out work/docs
 
