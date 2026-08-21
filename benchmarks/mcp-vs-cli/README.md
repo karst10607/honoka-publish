@@ -1,5 +1,8 @@
 # MCP vs CLI — publishing 50 Markdown docs to Notion
 
+> Read the results write-up first: [ARTICLE.md](ARTICLE.md) — the numbers, the
+> analysis, and the two-sentence reproduction. This README is the method.
+
 Benchmark comparing two ways of getting the same 50 Markdown files into a Notion
 database:
 
