@@ -14,4 +14,5 @@ test-notion.cjs
 # Benchmark artifacts
 benchmarks/mcp-vs-cli/work/
 benchmarks/mcp-vs-cli/results/raw/
+# results/summary.csv is intentionally tracked: sample evidence for the article
 benchmarks/mcp-vs-cli/.env

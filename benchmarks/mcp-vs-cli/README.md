@@ -22,6 +22,9 @@ Notion API layer.
    - rounds 2+ = warm (CLI's per-directory registry at `work/docs/.honoka/`
      skips unchanged docs; MCP queries Notion by title and updates in place)
 3. `metrics.cjs` aggregates `results/raw/round-*.json` into `results/summary.csv`.
+   The committed `results/summary.csv` is a sample from the author's run (evidence
+   for the accompanying article); fresh runs overwrite it, raw transcripts stay
+   gitignored.
 
 Metrics captured per run: wall time (ms), per-doc ok/fail counts (CLI parsed
 from its `Done. N synced, M skipped, K errors.` summary line; MCP per JSON-RPC
