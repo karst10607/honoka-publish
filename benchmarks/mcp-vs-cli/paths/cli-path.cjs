@@ -4,13 +4,13 @@
  * Path A: honoka-publish CLI — one-shot sync of the generated corpus.
  * Measures wall time and exit code; captures stdout/stderr for the transcript.
  *
- * Usage: node paths/cli-path.mjs --round 1
+ * Usage: node paths/cli-path.cjs --round 1
  */
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
-const ROOT = path.resolve(__dirname, "..", "..");
+const ROOT = path.resolve(__dirname, "..", "..", "..");
 const BENCH = path.join(ROOT, "benchmarks", "mcp-vs-cli");
 const DOCS = path.join(BENCH, "work", "docs");
 const RAW = path.join(BENCH, "results", "raw");
