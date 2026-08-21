@@ -10,3 +10,8 @@ chrome-extension/build/
 # Dev sanity scripts
 mcp-sanity.cjs
 test-notion.cjs
+
+# Benchmark artifacts
+benchmarks/mcp-vs-cli/work/
+benchmarks/mcp-vs-cli/results/raw/
+benchmarks/mcp-vs-cli/.env
