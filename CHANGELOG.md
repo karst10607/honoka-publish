@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.11.1
+
+- **Security (bridge)**: all HTTP bridge routes now require a bearer token (auto-generated `bridgeToken` in `.honoka/bridge-settings.json`, mode 0600; `?token=` supported for navigation/SSE clients); unauthenticated requests return 401
+- **Security (bridge)**: CORS `*` replaced with a `bridgeAllowedOrigins` allowlist (default: no cross-origin access); preflight only answered for allowed origins
+- **Security (bridge)**: `GET /api/settings` systematically masks all secret-looking values; `bridgeToken` cannot be overwritten via the settings API; settings file enforced to 0600
+- **Tests**: zero-dependency test suite (`node:test`, `npm test`) covering auth, redaction, CORS, and save/docs round-trip
+- **CI**: new `ci.yml` — syntax check + tests on every PR and main push
+- **Extension**: optional Doc Library bridge path sends the stored bridge token (`honokaSettings.bridgeToken`); manifest gains `http://127.0.0.1/*` host permission; without a token it degrades to local history as before
+- **Deps**: package-lock synced with declared optionalDependencies (discord.js entry restored)
+
 ## v1.11.0
 
 - **MCP-only architecture**: Bridge daemon removed — Chrome Extension no longer depends on HTTP bridge; sync happens via AI assistants (Antigravity / Codex / Claude Desktop) using MCP stdio

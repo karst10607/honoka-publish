@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Honoka Lite",
-  "version": "1.11.0",
+  "version": "1.11.1",
   "description": "Track Notion page visits, analyze token budgets. Works with Honoka MCP server for Notion sync.",
   "permissions": [
     "storage",
@@ -9,7 +9,8 @@
   ],
   "host_permissions": [
     "https://*.notion.so/*",
-    "https://*.notion.site/*"
+    "https://*.notion.site/*",
+    "http://127.0.0.1/*"
   ],
   "background": {
     "service_worker": "src/background.js",

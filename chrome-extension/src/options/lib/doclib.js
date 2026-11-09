@@ -10,6 +10,16 @@ let currentFilter = null; // filter function
 let currentSort = { field: 'lastModified', asc: false };
 let searchQuery = '';
 
+/** Bridge token from extension settings (honokaSettings.bridgeToken). */
+async function getBridgeToken() {
+  const data = await chrome.storage.local.get('honokaSettings');
+  return data.honokaSettings?.bridgeToken || '';
+}
+
+function authHeaders(token) {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 const COLUMNS = [
   { id: 'title', label: 'Title', sortable: true },
   { id: 'category', label: 'Category', sortable: true },
@@ -24,7 +34,8 @@ const COLUMNS = [
 export async function fetchDocs() {
   let bridgeDocs = [];
   try {
-    const resp = await fetch(`${BRIDGE_URL}/api/docs`);
+    const token = await getBridgeToken();
+    const resp = await fetch(`${BRIDGE_URL}/api/docs`, { headers: authHeaders(token) });
     if (!resp.ok) throw new Error(`Bridge returned ${resp.status}`);
     const data = await resp.json();
     bridgeDocs = (data.docs || []).map(normalizeDoc);
@@ -307,9 +318,12 @@ function downloadBlob(blob, filename) {
  */
 function openPreview(path) {
   if (!path) return;
-  const url = `${BRIDGE_URL}/files/${path}/index.md`;
-  // Try to open the raw markdown
-  window.open(url, '_blank');
+  let url = `${BRIDGE_URL}/files/${path}/index.md`;
+  // Top-level navigation cannot carry headers; use the query-token form.
+  getBridgeToken().then((token) => {
+    if (token) url += `?token=${encodeURIComponent(token)}`;
+    window.open(url, '_blank');
+  });
 }
 
 /**
@@ -317,7 +331,8 @@ function openPreview(path) {
  */
 export async function checkBridge() {
   try {
-    const resp = await fetch(`${BRIDGE_URL}/status`);
+    const token = await getBridgeToken();
+    const resp = await fetch(`${BRIDGE_URL}/status`, { headers: authHeaders(token) });
     if (!resp.ok) return false;
     const data = await resp.json();
     return data.ok === true;

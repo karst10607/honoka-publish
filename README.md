@@ -50,6 +50,24 @@ npx honoka-publish --init
 - **Telegram** — Receive URLs via Telegram bot and auto-sync
 - **Video download** — Download videos via yt-dlp
 
+## Bridge security
+
+The optional HTTP bridge (`--bridge`, port 44124) requires authentication:
+
+- A random `bridgeToken` is generated on first start into
+  `<docs-dir>/.honoka/bridge-settings.json` (file mode `0600`). The startup log
+  prints the file path, never the token itself.
+- Every request must carry `Authorization: Bearer <token>` (or `?token=<token>`
+  for navigations / SSE clients). Unauthenticated requests get `401`.
+- Cross-origin browser requests are only served for origins listed in the
+  `bridgeAllowedOrigins` setting (array of strings); by default no
+  `Access-Control-Allow-Origin` header is sent.
+- `GET /api/settings` masks every secret-looking value (`••••` + last 4 chars);
+  the bridge token cannot be changed through the settings API.
+- Chrome Extension: the optional Doc Library bridge path reads
+  `honokaSettings.bridgeToken` from extension storage; without it the extension
+  falls back to local tracking history (MCP-only architecture is unaffected).
+
 ## License
 
 MIT
