@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.11.7
+
+- **Launcher**: new `bin/honoka-launch.js` starts the bridge and auto-starts the AuraPet daemon when it is not already running (TCP probe on `AURAPET_BRIDGE_PORT`, default 47821; detached + stdio ignore so processes stay separate). Config: `AURAPET_DIR`, `AURAPET_DAEMON_CMD`, `HONOKA_NO_PET=1`; failures only warn
+- **Tests**: 7 launcher tests with injected probe/spawn (disabled / running / unconfigured / spawn / spawn failure / real port probe) — 70/70 green
+
 ## v1.11.6
 
 - **Event stream**: new `GET /events` SSE endpoint (bridge token auth, `?token=` for EventSource) emitting `url_received` / `download_progress` (10% steps) / `note_saved` / `error` with an in-process event bus, a 100-event ring buffer and `Last-Event-ID` replay; string payloads scrub `token=` values
