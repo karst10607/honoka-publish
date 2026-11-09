@@ -13,6 +13,7 @@ const crypto = require("crypto");
 
 const { createPage, appendBlocks } = require("./notion");
 const { toBlocks } = require("./markdown");
+const { writeJsonAtomic } = require("./lib/state-file");
 
 const PKG = require("../package.json");
 const VERSION = PKG.version;
@@ -89,7 +90,7 @@ function loadTrackingEntries() {
 
 function saveTrackingEntries(entries) {
   ensureTrackingDir();
-  fs.writeFileSync(TRACKING_FILE, JSON.stringify(entries, null, 2), "utf8");
+  writeJsonAtomic(TRACKING_FILE, entries);
 }
 
 function recordTrackingEntry({ source, title, url }) {
@@ -172,7 +173,7 @@ function saveSettings(data) {
   ensureSettingsDir();
   const current = loadSettings();
   const merged = { ...current, ...data };
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(merged, null, 2), { encoding: "utf8", mode: 0o600 });
+  writeJsonAtomic(SETTINGS_FILE, merged);
   fs.chmodSync(SETTINGS_FILE, 0o600);
   return merged;
 }

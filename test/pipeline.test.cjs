@@ -372,6 +372,24 @@ test("article fetch failure after retry lands in inbox", async () => {
   }
 });
 
+test("forceKind overrides classification (article URL forced to video)", async () => {
+  const joplin = await startMockJoplin();
+  const dl = fakeDownload();
+  try {
+    const result = await processUrl("https://example.com/not-a-video-page", {
+      honokaDir: HONOKA_DIR,
+      settings: { joplinApiUrl: joplin.url, joplinToken: "t", joplinNotebookId: "nb" },
+      deps: { downloadVideo: dl.fn },
+      forceKind: "video",
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.kind, "video");
+    assert.equal(dl.calls(), 1);
+  } finally {
+    await joplin.close();
+  }
+});
+
 // ── Reply formatting ──
 
 test("formatReply covers success, inbox fallback, and failure", () => {

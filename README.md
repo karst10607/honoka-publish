@@ -50,6 +50,9 @@ npx honoka-publish --init
 - **Joplin** — Save notes (with file attachments) to a local Joplin notebook via the Clipper REST API; falls back to a local inbox markdown when Joplin is offline. Configure `joplinApiUrl` / `joplinToken` / `joplinNotebookId` in `.honoka/bridge-settings.json`
 - **Telegram URL pipeline** — Send a link to the bot; videos are downloaded with yt-dlp, articles are extracted to markdown, and both become Joplin notes (see below)
 - **Video download** — Download videos via yt-dlp
+- **MCP tools** — The stdio MCP server exposes `save_url` / `download_video`
+  (background tickets + `get_job_status`), `search_notes` (Joplin), and
+  `list_inbox` alongside the Notion/AnyType tools
 
 ## Telegram URL pipeline
 
@@ -101,7 +104,27 @@ npx playwright install chromium
   data-driven selectors / `window.dataLayer` mappings (currently 591); other
   pages get generic title / heading / description extraction.
 - Without Playwright or the browser binary the pipeline silently degrades to a
-  text-only note — no error, nothing blocks the URL.
+  text-only note — no error, nothing blocks the URL. Set
+  `HONOKA_DISABLE_CAPTURE=1` to skip capture entirely (headless servers, CI).
+
+## MCP tools
+
+The default mode is a stdio MCP server. URL tools are asynchronous — they
+return `{ ticketId, status: "running" }` immediately (MCP tool calls have
+client timeouts) and clients poll `get_job_status`:
+
+| Tool | Purpose |
+| --- | --- |
+| `save_url` | Classify + ingest a URL into Joplin (video → yt-dlp, else article + screenshot) |
+| `download_video` | Force the yt-dlp path for any URL |
+| `search_notes` | Search Joplin notes (`query`, `limit` 1-100) |
+| `list_inbox` | List queued inbox markdown (failed pipeline/Joplin runs) |
+| `get_job_status` | Poll a background ticket (`running` / `done` / `error`) |
+
+Joplin tools read credentials from `.honoka/bridge-settings.json`. Shared JSON
+state (notion registry, tracking, settings) is written atomically and
+read-modify-write sequences take an advisory cross-process lock, so several
+MCP clients can run concurrently.
 
 ## Bridge security
 

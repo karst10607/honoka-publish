@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.11.5
+
+- **MCP tools**: `save_url` and `download_video` run the URL pipeline in the background and return a ticket id; `get_job_status` polls `running` / `done` / `error` (MCP is pull-only and tool calls have timeouts); `search_notes` queries Joplin via `/search` (limit clamped to 100); `list_inbox` lists queued fallback markdown newest-first
+- **Concurrency**: new `src/lib/state-file.js` — atomic JSON writes (tmp + rename) and an advisory cross-process lock (`wx` lockfile, stale-lock breaking); the MCP notion registry now merges entries under the lock (also preserves other fields, e.g. `anytypeObjectId`); bridge tracking/settings writes are atomic
+- **Pipeline**: `forceKind` option (`save_url` override / `download_video`) and `HONOKA_DISABLE_CAPTURE=1` to skip Chromium capture on headless hosts
+- **Tests**: 12 new tests — MCP stdio smoke (initialize, tools/list, save_url → ticket → job done → inbox, error codes), job registry (completion/error/cap), state-file (4 processes × 25 locked increments, stale locks, atomicity), Joplin search, forceKind — 56/56 green
+
 ## v1.11.4
 
 - **Full-page capture** (`src/integrations/capture.js`, ported from honoka-lite): headless Chromium full-page screenshot for article notes, uploaded to Joplin as a resource and embedded in the note body; browser closed after every capture

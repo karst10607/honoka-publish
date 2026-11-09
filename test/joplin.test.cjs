@@ -38,7 +38,7 @@ function startMock({ failNotes = false } = {}) {
     req.on("data", (c) => chunks.push(c));
     req.on("end", () => {
       const raw = Buffer.concat(chunks).toString("utf8");
-      requests.push({ method: req.method, route: url.pathname, token: url.searchParams.get("token"), contentType: req.headers["content-type"] || "", raw });
+      requests.push({ method: req.method, route: url.pathname, token: url.searchParams.get("token"), query: Object.fromEntries(url.searchParams), contentType: req.headers["content-type"] || "", raw });
       const send = (status, data) => {
         res.writeHead(status, { "Content-Type": "application/json" });
         res.end(data === undefined ? "" : JSON.stringify(data));
@@ -54,6 +54,12 @@ function startMock({ failNotes = false } = {}) {
       }
       if (/^\/(notes|resources)\/[^/]+$/.test(url.pathname) && req.method === "DELETE") {
         return send(200);
+      }
+      if (url.pathname === "/search" && req.method === "GET") {
+        return send(200, {
+          items: [{ id: "note_1", title: "Hello", parent_id: "nb_1", updated_time: Date.now() }],
+          has_more: false,
+        });
       }
       send(404, { error: "not found" });
     });
@@ -151,6 +157,23 @@ test("orphaned resources are cleaned up when note creation fails", async () => {
     assert.equal(result.fallback, "inbox");
     const deletes = mock.requests.filter((r) => r.method === "DELETE" && r.route === "/resources/res_1");
     assert.equal(deletes.length, 1);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("searchNotes queries /search with note type and clamped limit", async () => {
+  const mock = await startMock();
+  try {
+    const client = createClient({ apiUrl: mock.url, token: "test-token", notebookId: "nb_1" });
+    const result = await client.searchNotes("hello world", { limit: 500 });
+    assert.equal(result.items[0].id, "note_1");
+    const req = mock.requests.find((r) => r.route === "/search");
+    assert.ok(req, "search request sent");
+    assert.equal(req.token, "test-token");
+    assert.equal(req.query.query, "hello world");
+    assert.equal(req.query.type, "note");
+    assert.equal(req.query.limit, "100");
   } finally {
     await mock.close();
   }
