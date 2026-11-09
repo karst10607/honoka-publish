@@ -1,14 +1,15 @@
 /**
- * Bridge HTTP server — backward-compatible with the original honoka-bridge API.
+ * Bridge HTTP server — REST API on port 44124 for local clients.
  *
- * Provides a REST API on port 44124 for the Chrome Extension to:
- *   - Save clips to local disk
- *   - Save and push to Notion / AnyType
- *   - List saved documents
+ * All routes require the bridge token (Authorization: Bearer <token> or
+ * ?token=<token>). The token is auto-generated into .honoka/bridge-settings.json
+ * (mode 0600) on first start. Cross-origin requests are only answered for
+ * origins listed in the bridgeAllowedOrigins setting.
  */
 const fs = require("fs");
 const path = require("path");
 const http = require("http");
+const crypto = require("crypto");
 
 const { createPage, appendBlocks } = require("./notion");
 const { toBlocks } = require("./markdown");
@@ -36,14 +37,19 @@ function readBody(req) {
   });
 }
 
-function cors(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+function cors(req, res) {
+  const origin = req.headers.origin;
+  if (!origin) return;
+  const allowed = loadSettings().bridgeAllowedOrigins;
+  if (Array.isArray(allowed) && allowed.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  }
 }
 
 function json(res, status, data) {
-  cors(res);
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(data));
 }
@@ -166,8 +172,44 @@ function saveSettings(data) {
   ensureSettingsDir();
   const current = loadSettings();
   const merged = { ...current, ...data };
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(merged, null, 2), "utf8");
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(merged, null, 2), { encoding: "utf8", mode: 0o600 });
+  fs.chmodSync(SETTINGS_FILE, 0o600);
   return merged;
+}
+
+function ensureBridgeToken() {
+  const settings = loadSettings();
+  if (settings.bridgeToken) return settings.bridgeToken;
+  const token = crypto.randomBytes(24).toString("hex");
+  saveSettings({ bridgeToken: token });
+  return token;
+}
+
+function secretEqual(a, b) {
+  const ba = Buffer.from(String(a));
+  const bb = Buffer.from(String(b));
+  return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+}
+
+function isAuthorized(req, url, token) {
+  const header = req.headers.authorization || "";
+  if (header.startsWith("Bearer ") && secretEqual(header.slice(7), token)) return true;
+  const queryToken = url.searchParams.get("token");
+  return queryToken !== null && secretEqual(queryToken, token);
+}
+
+const SECRET_KEY_PATTERN = /token|secret|password|pat$|api[-_]?key/i;
+
+function redactSettings(settings) {
+  const safe = {};
+  for (const [key, value] of Object.entries(settings)) {
+    if (typeof value === "string" && value && SECRET_KEY_PATTERN.test(key)) {
+      safe[key] = "••••" + value.slice(-4);
+    } else {
+      safe[key] = value;
+    }
+  }
+  return safe;
 }
 
 // ── Handlers ──
@@ -315,25 +357,24 @@ async function handleSaveAndAnytype(req, res) {
 }
 
 function handleSettingsGet(req, res) {
-  const settings = loadSettings();
-  // Don't expose secrets in response unless explicitly requested
-  const safe = {
-    anytypeApiUrl: settings.anytypeApiUrl || "",
-    anytypeSpaceId: settings.anytypeSpaceId ? "••••" + settings.anytypeSpaceId.slice(-4) : "",
-    notionPat: settings.notionPat ? "••••" + settings.notionPat.slice(-4) : "",
-    notionDatabaseId: settings.notionDatabaseId || "",
-    bridgeUrl: `http://127.0.0.1:${DEFAULT_PORT}`,
-  };
-  json(res, 200, { ok: true, settings: safe });
+  const settings = redactSettings(loadSettings());
+  settings.bridgeUrl = `http://127.0.0.1:${DEFAULT_PORT}`;
+  json(res, 200, { ok: true, settings });
 }
 
 async function handleSettingsPost(req, res) {
   try {
     const body = await readBody(req);
-    const ALLOWED = ["notionPat", "notionDatabaseId", "anytypeApiKey", "anytypeSpaceId", "anytypeApiUrl", "telegramBotToken", "telegramAllowedUser", "discordBotToken", "discordAllowedChannel"];
+    const ALLOWED = ["notionPat", "notionDatabaseId", "anytypeApiKey", "anytypeSpaceId", "anytypeApiUrl", "telegramBotToken", "telegramAllowedUser", "discordBotToken", "discordAllowedChannel", "bridgeAllowedOrigins"];
     const toSave = {};
     for (const key of ALLOWED) {
       if (key in body) toSave[key] = body[key];
+    }
+    if ("bridgeAllowedOrigins" in toSave) {
+      const origins = toSave.bridgeAllowedOrigins;
+      if (!Array.isArray(origins) || origins.some((o) => typeof o !== "string")) {
+        return json(res, 400, { error: "bridgeAllowedOrigins must be an array of strings" });
+      }
     }
     const result = saveSettings(toSave);
     json(res, 200, { ok: true, changed: Object.keys(toSave).length > 0 });
@@ -423,15 +464,26 @@ function walkDir(dirPath, docs, category, baseDir) {
 // ── Request Router ──
 
 function createServer(port = DEFAULT_PORT) {
+  const token = ensureBridgeToken();
   const server = http.createServer(async (req, res) => {
-    cors(res);
+    cors(req, res);
+    const url = new URL(req.url, `http://localhost:${port}`);
+
+    // Preflight cannot carry credentials; answer only for allowed origins.
     if (req.method === "OPTIONS") {
-      res.writeHead(204);
+      if (res.getHeader("Access-Control-Allow-Origin")) {
+        res.writeHead(204);
+      } else {
+        res.writeHead(403);
+      }
       res.end();
       return;
     }
 
-    const url = new URL(req.url, `http://localhost:${port}`);
+    if (!isAuthorized(req, url, token)) {
+      return json(res, 401, { error: "unauthorized" });
+    }
+
     const route = url.pathname;
 
     try {
@@ -464,7 +516,6 @@ function createServer(port = DEFAULT_PORT) {
           return;
         }
         const ext = path.extname(filePath).toLowerCase();
-        cors(res);
         res.writeHead(200, { "Content-Type": MIME_TYPES[ext] || "application/octet-stream" });
         fs.createReadStream(filePath).pipe(res);
         return;
@@ -513,6 +564,7 @@ function runBridge(port = DEFAULT_PORT) {
   server.listen(port, "127.0.0.1", () => {
     console.error(`[honoka-publish] Bridge server running on http://127.0.0.1:${port}`);
     console.error(`[honoka-publish] Docs directory: ${HONOKA_DIR}`);
+    console.error(`[honoka-publish] Bridge token: "bridgeToken" field in ${SETTINGS_FILE} (send as Authorization: Bearer)`);
   });
   return server;
 }

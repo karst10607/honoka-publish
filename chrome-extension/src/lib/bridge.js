@@ -5,15 +5,17 @@
 export const DEFAULT_BRIDGE_URL = 'http://127.0.0.1:44124';
 
 export class BridgeClient {
-  constructor(baseUrl = DEFAULT_BRIDGE_URL) {
+  constructor(baseUrl = DEFAULT_BRIDGE_URL, token = '') {
     this.baseUrl = baseUrl.replace(/\/+$/, '');
+    this.token = token;
   }
 
   async request(method, path, body) {
     const url = `${this.baseUrl}${path}`;
-    const opts = { method };
+    const opts = { method, headers: {} };
+    if (this.token) opts.headers.Authorization = `Bearer ${this.token}`;
     if (body) {
-      opts.headers = { 'Content-Type': 'application/json' };
+      opts.headers['Content-Type'] = 'application/json';
       opts.body = JSON.stringify(body);
     }
     const res = await fetch(url, opts);
