@@ -1,0 +1,23 @@
+{
+  "rules": [
+    {
+      "id": "591",
+      "hosts": ["591.com.tw", "rent.591.com.tw", "sale.591.com.tw"],
+      "extract": {
+        "dataLayer": {
+          "find": "price_name",
+          "map": {
+            "price": "price_name",
+            "ping": "area_name",
+            "floor": "floor_name",
+            "layout": "layout_name",
+            "community": "community_name"
+          }
+        },
+        "fields": {
+          "price": [".house-price .price", ".house-info-price", ".price"]
+        }
+      }
+    }
+  ]
+}
