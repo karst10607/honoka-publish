@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.11.2
+
+- **New integration: Joplin** (`src/integrations/joplin.js`) — create notes in a configured notebook via the local Clipper REST API (probed against Joplin desktop 3.7.22), upload file attachments as resources (`data` multipart field) and link them in the note body, append source URL
+- **Offline fallback**: when Joplin is unreachable, `saveToJoplin` writes a local inbox markdown (frontmatter records the redacted failure reason) instead of losing the clip; orphaned resources from partial failures are cleaned up
+- **Settings**: `joplinApiUrl` / `joplinToken` / `joplinNotebookId` configurable via bridge settings API (token auto-masked in GET)
+- **Tests**: 7 new tests — mock-HTTP unit tests plus a real-Joplin integration test (create note + resource, verify, permanent-delete) that skips automatically when no local Joplin is configured (CI-safe)
+
 ## v1.11.1
 
 - **Security (bridge)**: all HTTP bridge routes now require a bearer token (auto-generated `bridgeToken` in `.honoka/bridge-settings.json`, mode 0600; `?token=` supported for navigation/SSE clients); unauthenticated requests return 401

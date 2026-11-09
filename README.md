@@ -47,6 +47,7 @@ npx honoka-publish --init
 ## Integrations
 
 - **Anytype** — Auto-publish to Anytype collections alongside Notion
+- **Joplin** — Save notes (with file attachments) to a local Joplin notebook via the Clipper REST API; falls back to a local inbox markdown when Joplin is offline. Configure `joplinApiUrl` / `joplinToken` / `joplinNotebookId` in `.honoka/bridge-settings.json`
 - **Telegram** — Receive URLs via Telegram bot and auto-sync
 - **Video download** — Download videos via yt-dlp
 
