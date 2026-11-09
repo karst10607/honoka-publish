@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.11.3
+
+- **Telegram URL pipeline** (`src/integrations/url-pipeline.js`): links sent to the Telegram bot are classified — video platforms (YouTube, Bilibili, Twitter/X, Vimeo, TikTok, …) download via `yt-dlp --no-playlist` with throttled progress replies; everything else is extracted to markdown (Readability + jsdom + turndown, meta-tag fallback) — and both become Joplin notes
+- **Resilience**: each step retries once; failures and Joplin outages queue the URL + reason into `<docs-dir>/Inbox/` and the bot replies with the queue path; videos over `videoMaxSizeMB` (default 500) are deleted and queued
+- **Settings**: `videoDir` / `videoMaxSizeMB` via bridge settings API (validated); `/status` now reflects Telegram configuration; no-token startup log includes setup guidance
+- **Telegram adapter**: `onUrl(url, { reply })` contract for interim + final replies; error replies redact `token=` values
+- **Tests**: 22 new tests (pipeline 15, Telegram adapter 6 with stubbed bot, bridge settings/status 2) — 37/37 green; README gains the Telegram setup guide
+
 ## v1.11.2
 
 - **New integration: Joplin** (`src/integrations/joplin.js`) — create notes in a configured notebook via the local Clipper REST API (probed against Joplin desktop 3.7.22), upload file attachments as resources (`data` multipart field) and link them in the note body, append source URL
