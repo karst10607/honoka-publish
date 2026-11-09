@@ -67,6 +67,16 @@ function createClient({ apiUrl, token, notebookId, timeoutMs = DEFAULT_TIMEOUT_M
     deleteResource(id) {
       return api("DELETE", `/resources/${id}`, { query: { permanent: "1" } });
     },
+    searchNotes(query, { limit = 20 } = {}) {
+      return api("GET", "/search", {
+        query: {
+          query,
+          type: "note",
+          fields: "id,title,parent_id,updated_time",
+          limit: String(Math.min(Math.max(Number(limit) || 20, 1), 100)),
+        },
+      });
+    },
   };
 }
 

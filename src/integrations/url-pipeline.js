@@ -22,12 +22,17 @@ const DEFAULT_VIDEO_MAX_MB = 500;
 const FETCH_TIMEOUT_MS = 15000;
 const MAX_HTML_BYTES = 2 * 1024 * 1024;
 
+function safeHost(url) {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
 /** Classify a URL as video (yt-dlp supported platform) or article. */
 function classifyUrl(url) {
-  let host = "";
-  try {
-    host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
-  } catch { /* invalid URL → article path, extraction will fail into inbox */ }
+  const host = safeHost(url);
   const isVideo = VIDEO_HOSTS.some((d) => host === d || host.endsWith(`.${d}`));
   return { kind: isVideo ? "video" : "article", host };
 }
@@ -143,10 +148,10 @@ function videoTitleFromFilename(filename) {
  * @param {object} [opts.deps] - injectable { downloadVideo } for tests
  * @returns {Promise<{ok, kind, title?, noteId?, videoPath?, fallback?, inboxPath?, error?, stage?}>}
  */
-async function processUrl(url, { honokaDir, settings = {}, notify = async () => {}, deps = {} }) {
+async function processUrl(url, { honokaDir, settings = {}, notify = async () => {}, deps = {}, forceKind } = {}) {
   const download = deps.downloadVideo || downloadVideo;
   const inboxDir = path.join(honokaDir, "Inbox");
-  const { kind, host } = classifyUrl(url);
+  const { kind, host } = forceKind ? { kind: forceKind, host: safeHost(url) } : classifyUrl(url);
   const joplinConfig = {
     apiUrl: settings.joplinApiUrl,
     token: settings.joplinToken,
@@ -181,7 +186,9 @@ async function processUrl(url, { honokaDir, settings = {}, notify = async () => 
     await notify("📄 Extracting article…");
     const { title, markdown } = await withRetry(() => extractArticle(url));
     // Full-page capture is best-effort: missing Playwright/Chromium degrades to text-only.
-    const capture = deps.capturePage === null ? null : (deps.capturePage || capturePage);
+    const capture = process.env.HONOKA_DISABLE_CAPTURE === "1" || deps.capturePage === null
+      ? null
+      : (deps.capturePage || capturePage);
     const shot = capture
       ? await capture(url, { outputDir: path.join(honokaDir, "Screenshots") }).catch(() => null)
       : null;

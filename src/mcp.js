@@ -16,6 +16,10 @@ const path = require("path");
 const { createPage, updatePageProperties, appendBlocks, clearPage, queryDatabase } = require("./notion");
 const { toBlocks, parseFrontmatter } = require("./markdown");
 const { syncDirectory } = require("./sync");
+const { readJson, writeJsonAtomic, updateJson } = require("./lib/state-file");
+const { startJob, getJob } = require("./integrations/jobs");
+const { createClient: createJoplinClient, redactUrl } = require("./integrations/joplin");
+const { processUrl } = require("./integrations/url-pipeline");
 const {
   saveToAnytype: anytypeCreate,
   updateAnytype,
@@ -354,6 +358,63 @@ function handleToolsList(id) {
           },
         },
       },
+      // ── URL pipeline (Joplin) ──
+      {
+        name: "save_url",
+        description: "Ingest a URL: video platforms download via yt-dlp, other pages are extracted to markdown; both become Joplin notes (inbox file fallback). Long work runs in the background — returns a ticket id to poll with get_job_status.",
+        inputSchema: {
+          type: "object",
+          required: ["url"],
+          properties: {
+            url: { type: "string", description: "URL to ingest" },
+            forceKind: { type: "string", enum: ["video", "article"], description: "Override URL classification (default: auto)" },
+          },
+        },
+      },
+      {
+        name: "download_video",
+        description: "Download a video URL via yt-dlp into the configured videoDir and save a Joplin note. Returns a ticket id to poll with get_job_status.",
+        inputSchema: {
+          type: "object",
+          required: ["url"],
+          properties: {
+            url: { type: "string", description: "Video URL (YouTube, Bilibili, Twitter/X, …)" },
+          },
+        },
+      },
+      {
+        name: "search_notes",
+        description: "Search Joplin notes by text (title/body) via the Clipper REST API. Returns id, title, parent_id, updated_time.",
+        inputSchema: {
+          type: "object",
+          required: ["query"],
+          properties: {
+            query: { type: "string", description: "Search query" },
+            limit: { type: "number", description: "Max results (1-100, default 20)", default: 20 },
+          },
+        },
+      },
+      {
+        name: "list_inbox",
+        description: "List queued inbox markdown files (URLs that failed pipeline/Joplin processing), newest first.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            limit: { type: "number", description: "Max results (default 20)", default: 20 },
+          },
+        },
+      },
+      {
+        name: "get_job_status",
+        description: "Poll a background job started by save_url/download_video. Returns status (running|done|error), result, and error.",
+        inputSchema: {
+          type: "object",
+          required: ["ticketId"],
+          properties: {
+            ticketId: { type: "string", description: "Ticket id returned by save_url/download_video" },
+          },
+        },
+      },
     ],
   });
 }
@@ -388,6 +449,16 @@ async function handleToolsCall(id, params) {
       return handleReadAnytype(id, args);
     case "delete_anytype":
       return handleDeleteAnytype(id, args);
+    case "save_url":
+      return handleSaveUrl(id, args);
+    case "download_video":
+      return handleDownloadVideo(id, args);
+    case "search_notes":
+      return handleSearchNotes(id, args);
+    case "list_inbox":
+      return handleListInbox(id, args);
+    case "get_job_status":
+      return handleGetJobStatus(id, args);
     default:
       sendError(id, -32601, `Tool not found: ${name}`);
   }
@@ -417,16 +488,18 @@ function okResult(data) {
 // ── Registry (Notion page ID tracking) ──
 
 function readRegistry() {
-  try {
-    return JSON.parse(fs.readFileSync(REGISTRY_FILE, "utf8"));
-  } catch {
-    return {};
-  }
+  return readJson(REGISTRY_FILE, {});
 }
 
 function writeRegistry(reg) {
-  ensureDir(path.dirname(REGISTRY_FILE));
-  fs.writeFileSync(REGISTRY_FILE, JSON.stringify(reg, null, 2), "utf8");
+  writeJsonAtomic(REGISTRY_FILE, reg);
+}
+
+/** Merge one slug entry under the cross-process lock (safe with concurrent MCP clients). */
+function updateRegistryEntry(slug, entry) {
+  return updateJson(REGISTRY_FILE, (reg) => {
+    reg[slug] = { ...(reg[slug] || {}), ...entry };
+  });
 }
 
 // ── Path resolution ──
@@ -716,8 +789,7 @@ async function handleSaveAndPush(id, args) {
 
     // Update registry
     const url = notionUrl(finalPageId);
-    reg[slug] = { pageId: finalPageId, notionUrl: url, title, lastSync: new Date().toISOString() };
-    writeRegistry(reg);
+    await updateRegistryEntry(slug, { pageId: finalPageId, notionUrl: url, title, lastSync: new Date().toISOString() });
 
     sendResult(id, okResult({
       ok: true,
@@ -788,8 +860,7 @@ async function handleSyncClip(id, args) {
     await appendBlocks(finalPageId, blocks, token);
 
     const url = notionUrl(finalPageId);
-    reg[found.slug] = { pageId: finalPageId, notionUrl: url, title, lastSync: new Date().toISOString() };
-    writeRegistry(reg);
+    await updateRegistryEntry(found.slug, { pageId: finalPageId, notionUrl: url, title, lastSync: new Date().toISOString() });
 
     sendResult(id, okResult({
       ok: true,
@@ -958,12 +1029,13 @@ async function handleSyncToAnytype(id, args) {
     }
 
     // Update registry with AnyType object ID
-    reg[found.slug] = {
-      ...(reg[found.slug] || {}),
-      anytypeObjectId: result.objectId,
-      lastAnytypeSync: new Date().toISOString(),
-    };
-    writeRegistry(reg);
+    await updateJson(REGISTRY_FILE, (reg) => {
+      reg[found.slug] = {
+        ...(reg[found.slug] || {}),
+        anytypeObjectId: result.objectId,
+        lastAnytypeSync: new Date().toISOString(),
+      };
+    });
 
     sendResult(id, okResult({
       ok: true,
@@ -1041,6 +1113,98 @@ async function handleDeleteAnytype(id, args) {
   } catch (err) {
     sendError(id, -32000, `Delete failed: ${err.message}`);
   }
+}
+
+// ── URL pipeline tools (save_url / download_video / search_notes / list_inbox / get_job_status) ──
+
+const BRIDGE_SETTINGS_FILE = path.join(HONOKA_DIR, ".honoka", "bridge-settings.json");
+
+function loadBridgeSettings() {
+  return readJson(BRIDGE_SETTINGS_FILE, {});
+}
+
+function startIngestJob(id, type, url, forceKind) {
+  const ticketId = startJob(type, () =>
+    processUrl(url, {
+      honokaDir: HONOKA_DIR,
+      settings: loadBridgeSettings(),
+      forceKind,
+    })
+  );
+  sendResult(id, okResult({ ok: true, ticketId, status: "running", type, url }));
+}
+
+function handleSaveUrl(id, args) {
+  const { url, forceKind } = args;
+  if (!url) return sendError(id, -32602, "url is required");
+  if (forceKind && forceKind !== "video" && forceKind !== "article") {
+    return sendError(id, -32602, "forceKind must be 'video' or 'article'");
+  }
+  startIngestJob(id, "save_url", url, forceKind);
+}
+
+function handleDownloadVideo(id, args) {
+  const { url } = args;
+  if (!url) return sendError(id, -32602, "url is required");
+  startIngestJob(id, "download_video", url, "video");
+}
+
+function handleGetJobStatus(id, args) {
+  const { ticketId } = args;
+  if (!ticketId) return sendError(id, -32602, "ticketId is required");
+  const job = getJob(ticketId);
+  if (!job) return sendError(id, -32000, `Unknown ticket: ${ticketId}`);
+  sendResult(id, okResult({ ok: true, ...job }));
+}
+
+async function handleSearchNotes(id, args) {
+  const { query, limit } = args;
+  if (!query) return sendError(id, -32602, "query is required");
+  const settings = loadBridgeSettings();
+  if (!settings.joplinApiUrl || !settings.joplinToken) {
+    return sendError(id, -32000, `Joplin not configured (set joplinApiUrl / joplinToken in ${BRIDGE_SETTINGS_FILE})`);
+  }
+  try {
+    const client = createJoplinClient({
+      apiUrl: settings.joplinApiUrl,
+      token: settings.joplinToken,
+      notebookId: settings.joplinNotebookId,
+    });
+    const result = await client.searchNotes(query, { limit });
+    const items = result.items || [];
+    sendResult(id, okResult({ ok: true, count: items.length, items, hasMore: !!result.has_more }));
+  } catch (err) {
+    sendError(id, -32000, `Joplin search failed: ${redactUrl(err.message)}`);
+  }
+}
+
+function handleListInbox(id, args) {
+  const limit = Math.max(Number(args && args.limit) || 20, 1);
+  const inboxDir = path.join(HONOKA_DIR, "Inbox");
+  let names = [];
+  try {
+    names = fs.readdirSync(inboxDir).filter((name) => name.endsWith(".md"));
+  } catch { /* inbox does not exist yet */ }
+  const items = names.map((name) => {
+    const file = path.join(inboxDir, name);
+    const stat = fs.statSync(file);
+    const head = fs.readFileSync(file, "utf8").slice(0, 2048);
+    const field = (key) => {
+      const match = head.match(new RegExp(`^${key}:\\s*(.+)$`, "m"));
+      if (!match) return null;
+      let value = match[1].trim();
+      if (/^".*"$/.test(value) || /^'.*'$/.test(value)) value = value.slice(1, -1);
+      return value;
+    };
+    return {
+      filename: name,
+      title: field("title"),
+      source: field("source"),
+      fallback_reason: field("fallback_reason"),
+      modified: stat.mtime.toISOString(),
+    };
+  }).sort((a, b) => b.modified.localeCompare(a.modified)).slice(0, limit);
+  sendResult(id, okResult({ ok: true, dir: inboxDir, count: names.length, items }));
 }
 
 function runMCP() {
