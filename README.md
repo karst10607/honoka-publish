@@ -126,6 +126,21 @@ state (notion registry, tracking, settings) is written atomically and
 read-modify-write sequences take an advisory cross-process lock, so several
 MCP clients can run concurrently.
 
+## Event stream (SSE)
+
+`GET /events` streams pipeline events as Server-Sent Events, using the same
+bridge token (`EventSource` passes `?token=`). Event types: `url_received`,
+`download_progress`, `note_saved`, `error` — payloads carry only URL / title /
+status (note bodies never, `token=` values scrubbed).
+
+```bash
+curl -N "http://127.0.0.1:44124/events?token=<bridgeToken>"
+```
+
+Frames carry an `id`; reconnecting with `Last-Event-ID` replays buffered events
+(ring of 100) so short disconnects lose nothing. The AuraPet daemon subscribes
+here and turns events into desktop-pet bubbles (mabi #53).
+
 ## Bridge security
 
 The optional HTTP bridge (`--bridge`, port 44124) requires authentication:

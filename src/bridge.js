@@ -14,6 +14,7 @@ const crypto = require("crypto");
 const { createPage, appendBlocks } = require("./notion");
 const { toBlocks } = require("./markdown");
 const { writeJsonAtomic } = require("./lib/state-file");
+const { subscribe, replaySince } = require("./events");
 
 const PKG = require("../package.json");
 const VERSION = PKG.version;
@@ -153,6 +154,37 @@ async function handleTrackingEntries(req, res) {
     entries = entries.filter((e) => e.ts > since);
   }
   json(res, 200, { entries, count: entries.length });
+}
+
+/**
+ * GET /events — Server-Sent Events stream of pipeline events.
+ * Auth uses the normal bridge token (EventSource passes ?token=).
+ * Replays buffered events after Last-Event-ID so reconnects lose nothing.
+ */
+function handleEvents(req, res, url) {
+  const lastEventId = req.headers["last-event-id"] || url.searchParams.get("lastEventId") || "";
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.write("retry: 3000\n\n");
+
+  const send = (event) => {
+    res.write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+  };
+  for (const event of replaySince(lastEventId)) send(event);
+
+  const unsubscribe = subscribe(send);
+  const heartbeat = setInterval(() => res.write(": ping\n\n"), 25000);
+  if (typeof heartbeat.unref === "function") heartbeat.unref();
+  const cleanup = () => {
+    clearInterval(heartbeat);
+    unsubscribe();
+  };
+  req.on("close", cleanup);
+  res.on("close", cleanup);
 }
 
 const SETTINGS_FILE = path.join(HONOKA_DIR, ".honoka", "bridge-settings.json");
@@ -504,6 +536,7 @@ function createServer(port = DEFAULT_PORT) {
       if (route === "/api/docs" && req.method === "GET") return handleList(req, res);
 
       if (route === "/api/tracking/entries" && req.method === "GET") return handleTrackingEntries(req, res);
+      if (route === "/events" && req.method === "GET") return handleEvents(req, res, url);
       if (route === "/history/ingest" && req.method === "POST") return await handleHistoryIngest(req, res);
 
       // Legacy endpoints (old Bridge compatibility)

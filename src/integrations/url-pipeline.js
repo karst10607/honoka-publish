@@ -11,6 +11,7 @@ const path = require("path");
 const { downloadVideo } = require("./video");
 const { saveToJoplin, writeInboxFallback, redactUrl } = require("./joplin");
 const { capturePage } = require("./capture");
+const { emitEvent } = require("../events");
 
 const VIDEO_HOSTS = [
   "youtube.com", "youtu.be", "bilibili.com", "b23.tv",
@@ -118,7 +119,7 @@ async function withRetry(fn) {
 }
 
 /** Throttle yt-dlp progress notifications to one message per 10% step. */
-function makeProgressNotifier(notify) {
+function makeProgressNotifier(notify, url) {
   let lastStep = -1;
   return (pctString) => {
     const pct = parseFloat(pctString);
@@ -126,7 +127,9 @@ function makeProgressNotifier(notify) {
     const step = Math.floor(pct / 10);
     if (step <= lastStep) return;
     lastStep = step;
-    Promise.resolve(notify(`⏳ Downloading… ${Math.min(pct, 100)}%`)).catch(() => {});
+    const percent = Math.min(pct, 100);
+    emitEvent({ type: "download_progress", url, progress: percent });
+    Promise.resolve(notify(`⏳ Downloading… ${percent}%`)).catch(() => {});
   };
 }
 
@@ -152,6 +155,7 @@ async function processUrl(url, { honokaDir, settings = {}, notify = async () => 
   const download = deps.downloadVideo || downloadVideo;
   const inboxDir = path.join(honokaDir, "Inbox");
   const { kind, host } = forceKind ? { kind: forceKind, host: safeHost(url) } : classifyUrl(url);
+  emitEvent({ type: "url_received", url, kind });
   const joplinConfig = {
     apiUrl: settings.joplinApiUrl,
     token: settings.joplinToken,
@@ -164,7 +168,7 @@ async function processUrl(url, { honokaDir, settings = {}, notify = async () => 
       const videoDir = settings.videoDir || path.join(honokaDir, "Videos");
       const maxBytes = (Number(settings.videoMaxSizeMB) > 0 ? Number(settings.videoMaxSizeMB) : DEFAULT_VIDEO_MAX_MB) * 1024 * 1024;
       const { filename } = await withRetry(() =>
-        download(url, { outputDir: videoDir, onProgress: makeProgressNotifier(notify) })
+        download(url, { outputDir: videoDir, onProgress: makeProgressNotifier(notify, url) })
       );
       const videoPath = path.join(videoDir, filename);
       const size = fs.statSync(videoPath).size;
@@ -180,6 +184,7 @@ async function processUrl(url, { honokaDir, settings = {}, notify = async () => 
         `Size: ${(size / 1048576).toFixed(1)} MB`,
       ].join("\n");
       const saved = await saveToJoplin({ title, markdown, sourceUrl: url }, joplinConfig, { inboxDir });
+      emitSaveOutcome(saved, { url, title, kind });
       return { ...saved, kind, title, videoPath, stage: "joplin" };
     }
 
@@ -200,6 +205,7 @@ async function processUrl(url, { honokaDir, settings = {}, notify = async () => 
         .join("\n");
     }
     const saved = await saveToJoplin({ title, markdown: body, sourceUrl: url, files }, joplinConfig, { inboxDir });
+    emitSaveOutcome(saved, { url, title, kind });
     return { ...saved, kind, title, screenshotPath: files[0], stage: "joplin" };
   } catch (err) {
     const error = redactUrl(err.message);
@@ -207,7 +213,16 @@ async function processUrl(url, { honokaDir, settings = {}, notify = async () => 
       { title: url, markdown: `URL processing failed (${kind}).\n\nSource: ${url}`, sourceUrl: url, error },
       inboxDir
     );
+    emitEvent({ type: "error", url, stage: kind === "video" ? "download" : "extract", error, inboxPath });
     return { ok: false, kind, stage: kind === "video" ? "download" : "extract", inboxPath, error };
+  }
+}
+
+function emitSaveOutcome(saved, { url, title, kind }) {
+  if (saved.ok) {
+    emitEvent({ type: "note_saved", url, title, noteId: saved.noteId, kind });
+  } else {
+    emitEvent({ type: "error", url, stage: "joplin", error: saved.error, inboxPath: saved.inboxPath });
   }
 }
 
