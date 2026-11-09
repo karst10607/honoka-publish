@@ -365,7 +365,7 @@ function handleSettingsGet(req, res) {
 async function handleSettingsPost(req, res) {
   try {
     const body = await readBody(req);
-    const ALLOWED = ["notionPat", "notionDatabaseId", "anytypeApiKey", "anytypeSpaceId", "anytypeApiUrl", "telegramBotToken", "telegramAllowedUser", "discordBotToken", "discordAllowedChannel", "bridgeAllowedOrigins"];
+    const ALLOWED = ["notionPat", "notionDatabaseId", "anytypeApiKey", "anytypeSpaceId", "anytypeApiUrl", "telegramBotToken", "telegramAllowedUser", "discordBotToken", "discordAllowedChannel", "bridgeAllowedOrigins", "joplinApiUrl", "joplinToken", "joplinNotebookId"];
     const toSave = {};
     for (const key of ALLOWED) {
       if (key in body) toSave[key] = body[key];
