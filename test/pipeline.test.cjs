@@ -26,17 +26,23 @@ after(() => {
 function startMockJoplin() {
   const requests = [];
   let counter = 0;
+  let resourceCounter = 0;
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, "http://localhost");
     const chunks = [];
     req.on("data", (c) => chunks.push(c));
     req.on("end", () => {
       const raw = Buffer.concat(chunks).toString("utf8");
-      requests.push({ method: req.method, route: url.pathname, raw });
+      requests.push({ method: req.method, route: url.pathname, contentType: req.headers["content-type"] || "", raw });
       if (url.pathname === "/notes" && req.method === "POST") {
         counter += 1;
         res.writeHead(200, { "Content-Type": "application/json" });
         return res.end(JSON.stringify({ id: `note_${counter}`, ...JSON.parse(raw) }));
+      }
+      if (url.pathname === "/resources" && req.method === "POST") {
+        resourceCounter += 1;
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ id: `res_${resourceCounter}` }));
       }
       res.writeHead(404);
       res.end();
@@ -52,6 +58,8 @@ function startMockJoplin() {
     });
   });
 }
+
+const NO_CAPTURE = async () => ({ ok: false, reason: "capture disabled in test" });
 
 function startArticleServer(htmlByPath) {
   const server = http.createServer((req, res) => {
@@ -278,6 +286,7 @@ test("article URL extracts and saves a Joplin note", async () => {
     const result = await processUrl(url, {
       honokaDir: HONOKA_DIR,
       settings: { joplinApiUrl: joplin.url, joplinToken: "t", joplinNotebookId: "nb" },
+      deps: { capturePage: NO_CAPTURE },
     });
     assert.equal(result.ok, true);
     assert.equal(result.kind, "article");
@@ -291,12 +300,50 @@ test("article URL extracts and saves a Joplin note", async () => {
   }
 });
 
+test("article note attaches the full-page screenshot and site-rule data", async () => {
+  const joplin = await startMockJoplin();
+  const article = await startArticleServer({ "/post": ARTICLE_HTML });
+  const shotsDir = path.join(TMP, "shots");
+  fs.mkdirSync(shotsDir, { recursive: true });
+  const pngPath = path.join(shotsDir, "capture-test.png");
+  fs.writeFileSync(pngPath, Buffer.from("89504e470d0a1a0a", "hex"));
+  const fakeCapture = async (url, { outputDir }) => ({
+    ok: true,
+    pngPath,
+    data: { price: "1000萬", ping: "30坪" },
+    ruleId: "591",
+    outputDir,
+  });
+  try {
+    const result = await processUrl(`${article.base}/post`, {
+      honokaDir: HONOKA_DIR,
+      settings: { joplinApiUrl: joplin.url, joplinToken: "t", joplinNotebookId: "nb" },
+      deps: { capturePage: fakeCapture },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.screenshotPath, pngPath);
+    const resourceReq = joplin.requests.find((r) => r.route === "/resources");
+    assert.ok(resourceReq, "screenshot uploaded as resource");
+    assert.match(resourceReq.contentType, /multipart\/form-data/);
+    assert.ok(resourceReq.raw.includes('name="data"'));
+    const noteReq = joplin.requests.find((r) => r.route === "/notes");
+    const payload = JSON.parse(noteReq.raw);
+    assert.ok(payload.body.includes("(:/res_1)"));
+    assert.ok(payload.body.includes("## Captured data"));
+    assert.ok(payload.body.includes("price: 1000萬"));
+  } finally {
+    await article.close();
+    await joplin.close();
+  }
+});
+
 test("Joplin unreachable falls back to inbox (article)", async () => {
   const article = await startArticleServer({ "/post": ARTICLE_HTML });
   try {
     const result = await processUrl(`${article.base}/post`, {
       honokaDir: HONOKA_DIR,
       settings: { joplinApiUrl: "http://127.0.0.1:1", joplinToken: "secret-token", joplinNotebookId: "nb" },
+      deps: { capturePage: NO_CAPTURE },
     });
     assert.equal(result.ok, false);
     assert.equal(result.fallback, "inbox");

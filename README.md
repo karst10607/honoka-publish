@@ -62,6 +62,8 @@ Send any URL to the Telegram bot while the bridge is running:
   `videoMaxSizeMB` (default 500) are deleted and queued to the inbox.
 - **Everything else** → article extraction (Readability + turndown when
   installed, meta-tag fallback otherwise) → Joplin note with the markdown body.
+  When Chromium is available the note also gets a **full-page screenshot**
+  attachment (see below), plus site-rule data for matching sites (e.g. 591).
 - **Failure handling** — each step retries once; if it still fails (or Joplin
   is offline) the URL and reason are written to `<docs-dir>/Inbox/` and the bot
   replies with the queue path, so nothing is silently lost.
@@ -81,6 +83,25 @@ curl -X POST http://127.0.0.1:44124/api/settings \
 recommended). Env vars `TELEGRAM_BOT_TOKEN` / `TELEGRAM_ALLOWED_USER` work too.
 Settings live in `.honoka/bridge-settings.json` (mode `0600`); secrets are
 masked in `GET /api/settings` and redacted from error replies.
+
+## Full-page capture
+
+Article notes include a full-page PNG screenshot of the page when Playwright
+and a Chromium binary are available:
+
+```bash
+npm install playwright
+npx playwright install chromium
+```
+
+- Captures land in `<docs-dir>/Screenshots/` and are uploaded to Joplin as a
+  resource (`![...](:/id)` in the note body); the browser closes after each capture.
+- Site-specific extraction lives in
+  [src/integrations/capture-rules.json](src/integrations/capture-rules.json) —
+  data-driven selectors / `window.dataLayer` mappings (currently 591); other
+  pages get generic title / heading / description extraction.
+- Without Playwright or the browser binary the pipeline silently degrades to a
+  text-only note — no error, nothing blocks the URL.
 
 ## Bridge security
 

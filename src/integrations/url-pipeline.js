@@ -10,6 +10,7 @@ const fs = require("fs");
 const path = require("path");
 const { downloadVideo } = require("./video");
 const { saveToJoplin, writeInboxFallback, redactUrl } = require("./joplin");
+const { capturePage } = require("./capture");
 
 const VIDEO_HOSTS = [
   "youtube.com", "youtu.be", "bilibili.com", "b23.tv",
@@ -179,8 +180,20 @@ async function processUrl(url, { honokaDir, settings = {}, notify = async () => 
 
     await notify("📄 Extracting article…");
     const { title, markdown } = await withRetry(() => extractArticle(url));
-    const saved = await saveToJoplin({ title, markdown, sourceUrl: url }, joplinConfig, { inboxDir });
-    return { ...saved, kind, title, stage: "joplin" };
+    // Full-page capture is best-effort: missing Playwright/Chromium degrades to text-only.
+    const capture = deps.capturePage === null ? null : (deps.capturePage || capturePage);
+    const shot = capture
+      ? await capture(url, { outputDir: path.join(honokaDir, "Screenshots") }).catch(() => null)
+      : null;
+    const files = shot && shot.ok && shot.pngPath ? [shot.pngPath] : [];
+    let body = markdown;
+    if (shot && shot.ok && shot.ruleId && shot.data && Object.keys(shot.data).length > 0) {
+      body += "\n\n---\n\n## Captured data\n" + Object.entries(shot.data)
+        .map(([key, value]) => `- ${key}: ${value}`)
+        .join("\n");
+    }
+    const saved = await saveToJoplin({ title, markdown: body, sourceUrl: url, files }, joplinConfig, { inboxDir });
+    return { ...saved, kind, title, screenshotPath: files[0], stage: "joplin" };
   } catch (err) {
     const error = redactUrl(err.message);
     const inboxPath = writeInboxFallback(

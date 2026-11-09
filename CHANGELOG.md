@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.11.4
+
+- **Full-page capture** (`src/integrations/capture.js`, ported from honoka-lite): headless Chromium full-page screenshot for article notes, uploaded to Joplin as a resource and embedded in the note body; browser closed after every capture
+- **Site rules**: data-driven selectors / `window.dataLayer` mappings in `src/integrations/capture-rules.json` (591 price/ping/floor/layout/community); matched-rule data is appended to the note under "Captured data"; generic pages get title/heading/description
+- **Graceful degradation**: missing Playwright package or Chromium binary yields `{ ok: false, reason }` — the pipeline silently saves a text-only note (install guidance in README)
+- **Pipeline**: article path captures the page (bounded lazy-load scroll, networkidle tolerated-best-effort) and attaches the screenshot via `saveToJoplin` files
+- **Tests**: 7 new tests (fake Playwright for generic + 591 rule + both degradation paths, real example.com Chromium capture that skips when unavailable) — 44/44 green locally
+
 ## v1.11.3
 
 - **Telegram URL pipeline** (`src/integrations/url-pipeline.js`): links sent to the Telegram bot are classified — video platforms (YouTube, Bilibili, Twitter/X, Vimeo, TikTok, …) download via `yt-dlp --no-playlist` with throttled progress replies; everything else is extracted to markdown (Readability + jsdom + turndown, meta-tag fallback) — and both become Joplin notes
