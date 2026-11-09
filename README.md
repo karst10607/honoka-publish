@@ -141,6 +141,23 @@ Frames carry an `id`; reconnecting with `Last-Event-ID` replays buffered events
 (ring of 100) so short disconnects lose nothing. The AuraPet daemon subscribes
 here and turns events into desktop-pet bubbles (mabi #53).
 
+## Launcher (bridge + pet)
+
+`honoka-launch` starts the bridge and, when the AuraPet daemon is not already
+running, spawns it **detached** (separate process; honoka never imports mabi
+code):
+
+```bash
+AURAPET_DIR=~/mabi honoka-launch        # bridge + pet daemon
+HONOKA_NO_PET=1 honoka-launch           # bridge only
+AURAPET_DAEMON_CMD=/opt/pet/run honoka-launch  # custom daemon command
+```
+
+The daemon is considered running when something listens on its bridge port
+(`AURAPET_BRIDGE_PORT`, default 47821). Missing config or a failed spawn only
+logs a warning — the bridge always starts. Requires `AURAPET_DIR` to point at
+the mabi checkout (its `daemon/standalone.js` is used).
+
 ## Bridge security
 
 The optional HTTP bridge (`--bridge`, port 44124) requires authentication:
