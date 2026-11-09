@@ -126,4 +126,4 @@ async function saveToJoplin({ title, markdown, sourceUrl, files = [] }, config, 
   }
 }
 
-module.exports = { createClient, saveToJoplin, redactUrl };
+module.exports = { createClient, saveToJoplin, writeInboxFallback, redactUrl };

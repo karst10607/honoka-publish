@@ -225,7 +225,7 @@ function handleStatus(req, res, port) {
     integrations: {
       notion: !!(settings.notionPat || process.env.NOTION_TOKEN),
       notetype: !!settings.anytypeApiKey,
-      telegram: false,
+      telegram: !!(settings.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN),
       discord: false,
     },
   });
@@ -365,7 +365,7 @@ function handleSettingsGet(req, res) {
 async function handleSettingsPost(req, res) {
   try {
     const body = await readBody(req);
-    const ALLOWED = ["notionPat", "notionDatabaseId", "anytypeApiKey", "anytypeSpaceId", "anytypeApiUrl", "telegramBotToken", "telegramAllowedUser", "discordBotToken", "discordAllowedChannel", "bridgeAllowedOrigins", "joplinApiUrl", "joplinToken", "joplinNotebookId"];
+    const ALLOWED = ["notionPat", "notionDatabaseId", "anytypeApiKey", "anytypeSpaceId", "anytypeApiUrl", "telegramBotToken", "telegramAllowedUser", "discordBotToken", "discordAllowedChannel", "bridgeAllowedOrigins", "joplinApiUrl", "joplinToken", "joplinNotebookId", "videoDir", "videoMaxSizeMB"];
     const toSave = {};
     for (const key of ALLOWED) {
       if (key in body) toSave[key] = body[key];
@@ -375,6 +375,12 @@ async function handleSettingsPost(req, res) {
       if (!Array.isArray(origins) || origins.some((o) => typeof o !== "string")) {
         return json(res, 400, { error: "bridgeAllowedOrigins must be an array of strings" });
       }
+    }
+    if ("videoMaxSizeMB" in toSave && !(Number(toSave.videoMaxSizeMB) > 0)) {
+      return json(res, 400, { error: "videoMaxSizeMB must be a positive number" });
+    }
+    if ("videoDir" in toSave && typeof toSave.videoDir !== "string") {
+      return json(res, 400, { error: "videoDir must be a string" });
     }
     const result = saveSettings(toSave);
     json(res, 200, { ok: true, changed: Object.keys(toSave).length > 0 });
@@ -539,13 +545,19 @@ function runBridge(port = DEFAULT_PORT) {
 
   // Telegram
   const { startBot: startTelegram } = require("./integrations/telegram");
+  const { processUrl, formatReply } = require("./integrations/url-pipeline");
   startTelegram({
     token: settings.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN || "",
     allowedUser: settings.telegramAllowedUser || process.env.TELEGRAM_ALLOWED_USER || "",
-    onUrl: async (url) => {
-      const title = await fetchUrlTitle(url);
-      recordTrackingEntry({ source: "telegram", title: title || url, url });
-      console.log(`  [Tracking] Telegram: ${title || url}`);
+    onUrl: async (url, { reply } = {}) => {
+      const result = await processUrl(url, {
+        honokaDir: HONOKA_DIR,
+        settings: loadSettings(),
+        notify: reply || (async () => {}),
+      });
+      recordTrackingEntry({ source: "telegram", title: result.title || url, url });
+      console.log(`  [Telegram] ${url} → ${result.ok ? `note ${result.noteId}` : result.fallback === "inbox" ? "inbox (Joplin down)" : `inbox (${result.stage} failed)`}`);
+      return formatReply(result);
     },
   });
 
