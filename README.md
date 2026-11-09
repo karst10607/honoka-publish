@@ -48,8 +48,39 @@ npx honoka-publish --init
 
 - **Anytype** — Auto-publish to Anytype collections alongside Notion
 - **Joplin** — Save notes (with file attachments) to a local Joplin notebook via the Clipper REST API; falls back to a local inbox markdown when Joplin is offline. Configure `joplinApiUrl` / `joplinToken` / `joplinNotebookId` in `.honoka/bridge-settings.json`
-- **Telegram** — Receive URLs via Telegram bot and auto-sync
+- **Telegram URL pipeline** — Send a link to the bot; videos are downloaded with yt-dlp, articles are extracted to markdown, and both become Joplin notes (see below)
 - **Video download** — Download videos via yt-dlp
+
+## Telegram URL pipeline
+
+Send any URL to the Telegram bot while the bridge is running:
+
+- **Video platforms** (YouTube, Bilibili, Twitter/X, Vimeo, TikTok, …) →
+  downloaded with `yt-dlp --no-playlist` into `videoDir` (default
+  `<docs-dir>/Videos`), with download progress reported back to the chat.
+  The Joplin note references the local file path. Files larger than
+  `videoMaxSizeMB` (default 500) are deleted and queued to the inbox.
+- **Everything else** → article extraction (Readability + turndown when
+  installed, meta-tag fallback otherwise) → Joplin note with the markdown body.
+- **Failure handling** — each step retries once; if it still fails (or Joplin
+  is offline) the URL and reason are written to `<docs-dir>/Inbox/` and the bot
+  replies with the queue path, so nothing is silently lost.
+
+Setup (bot token from [@BotFather](https://t.me/BotFather); `yt-dlp` on PATH):
+
+```bash
+# With the bridge running, configure via the settings API:
+curl -X POST http://127.0.0.1:44124/api/settings \
+  -H "Authorization: Bearer <bridgeToken>" -H "Content-Type: application/json" \
+  -d '{"telegramBotToken":"<bot token>","telegramAllowedUser":"<your Telegram user id>",
+       "joplinApiUrl":"http://127.0.0.1:41184","joplinToken":"<joplin token>",
+       "joplinNotebookId":"<notebook id>","videoMaxSizeMB":500}'
+```
+
+`telegramAllowedUser` restricts the bot to a single user id (strongly
+recommended). Env vars `TELEGRAM_BOT_TOKEN` / `TELEGRAM_ALLOWED_USER` work too.
+Settings live in `.honoka/bridge-settings.json` (mode `0600`); secrets are
+masked in `GET /api/settings` and redacted from error replies.
 
 ## Bridge security
 

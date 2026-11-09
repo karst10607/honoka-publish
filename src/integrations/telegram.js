@@ -10,12 +10,14 @@ let _bot = null;
  * Initialize the Telegram bot listener.
  * @param {object} opts
  * @param {string} opts.token - Telegram Bot Token
- * @param {function} opts.onUrl - Callback when a URL is received: (url) => void
+ * @param {function} opts.onUrl - Callback when a URL is received:
+ *   (url, { reply }) => Promise<string|void>. `reply(text)` sends an interim
+ *   message to the same chat; a returned string is sent as the final reply.
  * @param {string} [opts.allowedUser] - Optional Telegram user ID restriction
  */
 function startBot({ token, onUrl, allowedUser }) {
   if (!token) {
-    console.log("  Telegram: no token — disabled");
+    console.log("  Telegram: no token — disabled (set telegramBotToken + telegramAllowedUser via POST /api/settings)");
     return;
   }
 
@@ -54,10 +56,12 @@ function startBot({ token, onUrl, allowedUser }) {
     for (const url of urls) {
       try {
         bot.sendMessage(chatId, `  🔍 ${url}`);
-        if (onUrl) await onUrl(url);
-        bot.sendMessage(chatId, `  ✅ Done: ${url}`);
+        const reply = (text) => bot.sendMessage(chatId, text);
+        const finalText = onUrl ? await onUrl(url, { reply }) : undefined;
+        bot.sendMessage(chatId, typeof finalText === "string" ? finalText : `  ✅ Done: ${url}`);
       } catch (err) {
-        bot.sendMessage(chatId, `  ❌ ${url}: ${err.message}`);
+        const safeMessage = String(err.message).replace(/token=[^&\s"')]+/gi, "token=***");
+        bot.sendMessage(chatId, `  ❌ ${url}: ${safeMessage}`);
       }
     }
   });

@@ -171,3 +171,27 @@ test("CORS is restricted to configured origins; preflight needs no auth", async 
     assert.equal(preflightDenied.status, 403);
   });
 });
+
+test("settings POST accepts and validates video pipeline settings", async () => {
+  await withServer(async (port, token) => {
+    const ok = await request(port, "POST", "/api/settings", { token, body: { videoDir: "/tmp/videos", videoMaxSizeMB: 200 } });
+    assert.equal(ok.status, 200);
+    assert.equal(readSettings().videoDir, "/tmp/videos");
+    assert.equal(readSettings().videoMaxSizeMB, 200);
+    const badSize = await request(port, "POST", "/api/settings", { token, body: { videoMaxSizeMB: -5 } });
+    assert.equal(badSize.status, 400);
+    const badDir = await request(port, "POST", "/api/settings", { token, body: { videoDir: 123 } });
+    assert.equal(badDir.status, 400);
+  });
+});
+
+test("status reflects telegram configuration", async () => {
+  await withServer(async (port, token) => {
+    writeSettings({ telegramBotToken: "" });
+    const off = await request(port, "GET", "/status", { token });
+    assert.equal(JSON.parse(off.text).integrations.telegram, false);
+    writeSettings({ telegramBotToken: "123:abc" });
+    const on = await request(port, "GET", "/status", { token });
+    assert.equal(JSON.parse(on.text).integrations.telegram, true);
+  });
+});
