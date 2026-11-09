@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.11.6
+
+- **Event stream**: new `GET /events` SSE endpoint (bridge token auth, `?token=` for EventSource) emitting `url_received` / `download_progress` (10% steps) / `note_saved` / `error` with an in-process event bus, a 100-event ring buffer and `Last-Event-ID` replay; string payloads scrub `token=` values
+- **Pipeline**: emits domain events at ingestion start, download progress, note save, and every failure path (stage + inbox path), enabling the AuraPet daemon to show pet bubbles without polling
+- **Tests**: 7 new tests (scrubbing, ring replay, SSE auth/stream/replay, article error emission, video progress + note_saved) — 63/63 green
+
 ## v1.11.5
 
 - **MCP tools**: `save_url` and `download_video` run the URL pipeline in the background and return a ticket id; `get_job_status` polls `running` / `done` / `error` (MCP is pull-only and tool calls have timeouts); `search_notes` queries Joplin via `/search` (limit clamped to 100); `list_inbox` lists queued fallback markdown newest-first
