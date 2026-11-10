@@ -1,11 +1,17 @@
 # honoka-publish
 
+> **[架構遷移通知 — 2026-11-10 (`mabi` ADR 0002)]**
+> - **常駐 Daemon 收斂**：原 `honoka-bridge.service`（Port 44124）常駐資訊收集職責已正式移交並收斂至 **`karst10607/mabi`** 的跨平台單一 Daemon（`aurapet-daemon`，內建無 Playwright 純 JS `daemon/url-ingest.js`）。
+> - **隨選影音下載**：`yt-dlp` 影音下載（YT / FB / IG / X）已獨立為 `mabi` 內的隨選 stdio MCP 工具 `tools/mcp/yt-dlp-mcp.mjs`。
+> - 本儲存庫（`honoka-publish`）保留作為獨立 CLI 與 Notion/AnyType MCP 工具庫使用。
+
 CLI tool to publish local Markdown files to Notion with incremental sync, Direct Upload for images, and file watching.
 
 ```bash
 npx honoka-publish ./docs
 npx honoka-publish --watch ./docs
 ```
+
 
 ## Features
 
